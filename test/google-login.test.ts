@@ -37,7 +37,9 @@ test("Google callback accepts a nonce-bound refresh token over loopback", async 
   assert.ok(nonce);
   const csp = pageResponse.headers.get("content-security-policy") ?? "";
   assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /script-src 'self' https:\/\/www\.gstatic\.com https:\/\/apis\.google\.com/);
   assert.match(csp, /frame-src https:\/\/calisthenics-hannibal-firebase\.firebaseapp\.com/);
+  assert.match(csp, /frame-src [^;]*https:\/\/accounts\.google\.com/);
   assert.match(csp, /connect-src 'self' https:\/\/identitytoolkit\.googleapis\.com/);
   assert.equal(pageResponse.headers.get("cache-control"), "no-store");
 
