@@ -1,4 +1,5 @@
-import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -12,19 +13,28 @@ export function credentialsPath(): string {
   return CREDENTIALS_FILE;
 }
 
-export async function saveRefreshToken(refreshToken: string): Promise<void> {
+export async function saveRefreshToken(refreshToken: string, file = CREDENTIALS_FILE): Promise<void> {
   if (refreshToken.length === 0) {
     throw new Error("Refusing to save an empty refresh token.");
   }
 
-  const directory = dirname(CREDENTIALS_FILE);
+  const directory = dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  await writeFile(CREDENTIALS_FILE, `${JSON.stringify({ refreshToken })}\n`, { mode: 0o600 });
-  // writeFile's mode only applies to newly created files; repair pre-existing files too.
-  await chmod(CREDENTIALS_FILE, 0o600);
+  await chmod(directory, 0o700);
+
+  const temporaryFile = `${file}.${randomBytes(16).toString("hex")}.tmp`;
+  try {
+    await writeFile(temporaryFile, `${JSON.stringify({ refreshToken })}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    await chmod(temporaryFile, 0o600);
+    await rename(temporaryFile, file);
+    // rename retains the temporary file mode, but enforce it after replacement too.
+    await chmod(file, 0o600);
+  } finally {
+    await unlink(temporaryFile).catch(() => undefined);
+  }
 }
 
-export async function loadRefreshToken(): Promise<string> {
+export async function loadRefreshToken(file = CREDENTIALS_FILE): Promise<string> {
   const environmentToken = process.env.CALIVERSE_REFRESH_TOKEN;
   if (environmentToken !== undefined && environmentToken.length > 0) {
     return environmentToken;
@@ -32,23 +42,23 @@ export async function loadRefreshToken(): Promise<string> {
 
   let metadata;
   try {
-    metadata = await stat(CREDENTIALS_FILE);
+    metadata = await stat(file);
   } catch (error: unknown) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
-      throw new Error("No Caliverse credentials found. Run `pnpm login` first.");
+    throw new Error("No Caliverse credentials found. Run `pnpm login` first.");
     }
     throw error;
   }
 
   if ((metadata.mode & 0o077) !== 0) {
-    throw new Error(`Credentials file ${CREDENTIALS_FILE} is accessible to other users. Set its mode to 0600.`);
+    throw new Error(`Credentials file ${file} is accessible to other users. Set its mode to 0600.`);
   }
 
   let credentials: unknown;
   try {
-    credentials = JSON.parse(await readFile(CREDENTIALS_FILE, "utf8"));
+    credentials = JSON.parse(await readFile(file, "utf8"));
   } catch {
-    throw new Error(`Credentials file ${CREDENTIALS_FILE} is invalid JSON.`);
+    throw new Error(`Credentials file ${file} is invalid JSON.`);
   }
 
   if (
@@ -58,7 +68,7 @@ export async function loadRefreshToken(): Promise<string> {
     typeof (credentials as StoredCredentials).refreshToken !== "string" ||
     (credentials as StoredCredentials).refreshToken.length === 0
   ) {
-    throw new Error(`Credentials file ${CREDENTIALS_FILE} does not contain a refresh token.`);
+    throw new Error(`Credentials file ${file} does not contain a refresh token.`);
   }
   return (credentials as StoredCredentials).refreshToken;
 }
