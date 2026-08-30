@@ -71,7 +71,7 @@ export function loginScript(): string {
 }
 
 function setSecurityHeaders(response: ServerResponse): void {
-  response.setHeader("content-security-policy", "default-src 'none'; script-src 'self' https://www.gstatic.com; connect-src 'self'; style-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  response.setHeader("content-security-policy", "default-src 'none'; script-src 'self' https://www.gstatic.com; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://calisthenics-hannibal-firebase.firebaseapp.com; frame-src https://calisthenics-hannibal-firebase.firebaseapp.com; style-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   response.setHeader("x-content-type-options", "nosniff");
   response.setHeader("referrer-policy", "no-referrer");
   response.setHeader("cache-control", "no-store");

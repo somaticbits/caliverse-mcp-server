@@ -35,7 +35,10 @@ test("Google callback accepts a nonce-bound refresh token over loopback", async 
   const page = await pageResponse.text();
   const nonce = /name="caliverse-login-nonce" content="([^"]+)"/.exec(page)?.[1];
   assert.ok(nonce);
-  assert.match(pageResponse.headers.get("content-security-policy") ?? "", /default-src 'none'/);
+  const csp = pageResponse.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /frame-src https:\/\/calisthenics-hannibal-firebase\.firebaseapp\.com/);
+  assert.match(csp, /connect-src 'self' https:\/\/identitytoolkit\.googleapis\.com/);
   assert.equal(pageResponse.headers.get("cache-control"), "no-store");
 
   const response = await fetch(`${localUrl}token`, {
