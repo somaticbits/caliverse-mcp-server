@@ -85,6 +85,21 @@ test("createWorkout assigns an empty category list to clear categories", async (
   assert.equal(new URLSearchParams(String(requests[1]?.body)).get("workout_id"), "30");
 });
 
+test("plan reads use the extended timeout", async () => {
+  let signal: AbortSignal | undefined;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (_url, init) => {
+      signal = init?.signal as AbortSignal;
+      return jsonResponse([]);
+    }
+  });
+
+  await api.listPlans();
+  assert.ok(signal);
+  assert.equal(signal.aborted, false);
+});
+
 test("CaliverseApi bounds API error content and preserves status", async () => {
   const api = new CaliverseApi({
     tokenManager: { async getIdToken() { return "token"; } },

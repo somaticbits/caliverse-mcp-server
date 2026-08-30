@@ -4,6 +4,8 @@ import type { FetchLike } from "./auth.js";
 
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
 const MAX_ERROR_BODY_LENGTH = 1_000;
+const DEFAULT_TIMEOUT_MS = 20_000;
+const PLAN_TIMEOUT_MS = 60_000;
 
 export class CaliverseApiError extends Error {
   public constructor(
@@ -58,11 +60,11 @@ export class CaliverseApi {
   }
 
   public listPlans(): Promise<unknown> {
-    return this.request("/workouts/plans", { method: "GET" });
+    return this.request("/workouts/plans", { method: "GET" }, false, PLAN_TIMEOUT_MS);
   }
 
   public getPlan(planId: number): Promise<unknown> {
-    return this.request(`/workouts/plans/${planId}`, { method: "GET" });
+    return this.request(`/workouts/plans/${planId}`, { method: "GET" }, false, PLAN_TIMEOUT_MS);
   }
 
   public async createWorkout(input: WorkoutInput): Promise<unknown> {
@@ -172,7 +174,7 @@ export class CaliverseApi {
     return undefined;
   }
 
-  private async request(endpoint: string, init: RequestInit, retried = false): Promise<unknown> {
+  private async request(endpoint: string, init: RequestInit, retried = false, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {
     const token = await this.options.tokenManager.getIdToken(retried);
     const response = await this.fetchImpl(`${API_BASE_URL}${endpoint}`, {
       ...init,
@@ -181,11 +183,11 @@ export class CaliverseApi {
         "X-USER-ID-TOKEN": token,
         ...init.headers
       },
-      signal: AbortSignal.timeout(20_000)
+      signal: AbortSignal.timeout(timeoutMs)
     });
 
     if (response.status === 401 && !retried) {
-      return this.request(endpoint, init, true);
+      return this.request(endpoint, init, true, timeoutMs);
     }
 
     const text = await response.text();
