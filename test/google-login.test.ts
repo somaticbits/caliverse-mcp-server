@@ -43,6 +43,9 @@ test("Google callback accepts a nonce-bound refresh token over loopback", async 
   assert.match(csp, /connect-src 'self' https:\/\/identitytoolkit\.googleapis\.com/);
   assert.equal(pageResponse.headers.get("cache-control"), "no-store");
 
+  const redirectPageResponse = await fetch(`${localUrl}?firebase-event=example`);
+  assert.equal(redirectPageResponse.status, 200);
+
   const response = await fetch(`${localUrl}token`, {
     method: "POST",
     headers: { "content-type": "application/json" },

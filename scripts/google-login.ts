@@ -133,15 +133,17 @@ export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promis
         response.writeHead(403).end("Loopback requests only.");
         return;
       }
-      if (request.method === "GET" && request.url === "/") {
+      const path = new URL(request.url ?? "/", "http://localhost").pathname;
+      // Firebase's redirect result can add query parameters to this root URL.
+      if (request.method === "GET" && path === "/") {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(loginPage(nonce));
         return;
       }
-      if (request.method === "GET" && request.url === "/app.js") {
+      if (request.method === "GET" && path === "/app.js") {
         response.writeHead(200, { "content-type": "application/javascript; charset=utf-8" }).end(loginScript());
         return;
       }
-      if (request.method === "POST" && request.url === "/token") {
+      if (request.method === "POST" && path === "/token") {
         void readJsonBody(request).then(async (body) => {
           if (
             typeof body !== "object" || body === null ||
