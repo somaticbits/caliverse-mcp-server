@@ -1,5 +1,5 @@
 import { toFormBody } from "./serializer.js";
-import { toApiWorkoutPayload, type WorkoutInput } from "./types.js";
+import { toApiWorkoutPayload, workoutInputSchema, type WorkoutInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
@@ -77,16 +77,8 @@ export class CaliverseApi {
     if (typeof existing !== "object" || existing === null) {
       throw new Error("Caliverse returned an invalid workout while cloning.");
     }
-    const clone = structuredClone(existing) as Record<string, unknown>;
-    delete clone.id;
-    clone.title = title;
-    clone.is_public = 0;
-    clone.is_pro = 0;
-    return this.request("/workouts/with-supersets", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: toFormBody(clone)
-    });
+    const clone = this.toCloneInput(existing as Record<string, unknown>, title);
+    return this.createWorkout(clone);
   }
 
   public deleteWorkout(workoutId: number): Promise<unknown> {
@@ -116,6 +108,66 @@ export class CaliverseApi {
         workout_category_id_list: categoryIds
       })
     });
+  }
+
+  private toCloneInput(workout: Record<string, unknown>, title: string): WorkoutInput {
+    const groups = Array.isArray(workout.groups) ? workout.groups : [];
+    const categories = Array.isArray(workout.workout_categories) ? workout.workout_categories : [];
+    const supersets = Array.isArray(workout.supersets) ? workout.supersets : [];
+
+    return workoutInputSchema.parse({
+      title,
+      privateTitle: typeof workout.private_title === "string" ? workout.private_title : undefined,
+      isPublic: false,
+      isPro: false,
+      lengthInMinutes: workout.length_in_minutes,
+      level: workout.level,
+      warmupWorkoutId: this.readId(workout.warmup_workout),
+      cooldownWorkoutId: this.readId(workout.cooldown_workout),
+      imageUrl: typeof workout.image_url === "string" ? workout.image_url : null,
+      groupIds: groups.map((group) => this.readId(group)).filter((id): id is number => id !== undefined),
+      categoryIds: categories.map((category) => this.readId(category)).filter((id): id is number => id !== undefined),
+      supersets: supersets.map((superset) => {
+        const item = this.asRecord(superset, "superset");
+        const exercises = Array.isArray(item.workout_exercises) ? item.workout_exercises : [];
+        return {
+          supersetId: this.readId(item),
+          restBetweenCycles: item.rest_between_cycles,
+          orderInWorkout: item.order_in_workout,
+          title: typeof item.title === "string" ? item.title : "",
+          exercises: exercises.map((exercise) => {
+            const exerciseItem = this.asRecord(exercise, "workout exercise");
+            return {
+              exerciseId: this.readId(exerciseItem.exercise) ?? exerciseItem.exercise_id,
+              setCount: exerciseItem.set_count,
+              repetitionCount: exerciseItem.repetition_count,
+              repetitionType: exerciseItem.repetition_type,
+              orderInWorkout: exerciseItem.order_in_workout,
+              restTimeBeforeExercise: exerciseItem.rest_time_before_exercise,
+              description: typeof exerciseItem.description === "string" ? exerciseItem.description : undefined
+            };
+          })
+        };
+      })
+    });
+  }
+
+  private asRecord(value: unknown, context: string): Record<string, unknown> {
+    if (typeof value !== "object" || value === null) {
+      throw new Error(`Caliverse returned an invalid ${context} while cloning.`);
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readId(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+      return value;
+    }
+    if (typeof value === "object" && value !== null && typeof (value as { id?: unknown }).id === "number") {
+      const id = (value as { id: number }).id;
+      return Number.isInteger(id) && id > 0 ? id : undefined;
+    }
+    return undefined;
   }
 
   private async request(endpoint: string, init: RequestInit, retried = false): Promise<unknown> {

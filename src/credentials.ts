@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -20,6 +20,8 @@ export async function saveRefreshToken(refreshToken: string): Promise<void> {
   const directory = dirname(CREDENTIALS_FILE);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await writeFile(CREDENTIALS_FILE, `${JSON.stringify({ refreshToken })}\n`, { mode: 0o600 });
+  // writeFile's mode only applies to newly created files; repair pre-existing files too.
+  await chmod(CREDENTIALS_FILE, 0o600);
 }
 
 export async function loadRefreshToken(): Promise<string> {

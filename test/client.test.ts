@@ -45,3 +45,54 @@ test("CaliverseApi bounds API error content and preserves status", async () => {
     return true;
   });
 });
+
+test("cloneWorkout converts the read shape into the write payload", async () => {
+  const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const responses = [
+    jsonResponse({
+      id: 12,
+      title: "Source",
+      private_title: "Private source",
+      is_public: 1,
+      is_pro: 1,
+      length_in_minutes: 30,
+      level: "beginner",
+      groups: [{ id: 4 }],
+      workout_categories: [{ id: 9 }],
+      supersets: [{
+        id: 7,
+        rest_between_cycles: 60,
+        order_in_workout: 1,
+        title: "A",
+        workout_exercises: [{
+          exercise: { id: 42 },
+          set_count: 3,
+          repetition_count: 8,
+          repetition_type: "count",
+          order_in_workout: 1,
+          rest_time_before_exercise: 0
+        }]
+      }]
+    }),
+    jsonResponse({ id: 25 }),
+    jsonResponse({ ok: true }, 201)
+  ];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      const response = responses.shift();
+      assert.ok(response, "unexpected request");
+      return response;
+    }
+  });
+
+  await api.cloneWorkout(12, "Clone");
+
+  assert.match(requests[1]?.url ?? "", /workouts\/with-supersets$/);
+  const body = new URLSearchParams(String(requests[1]?.init?.body));
+  assert.equal(body.get("title"), "Clone");
+  assert.equal(body.get("workout_id"), "");
+  assert.equal(body.get("workout_supersets[0][workout_exercises][0][exercise_id]"), "42");
+  assert.match(requests[2]?.url ?? "", /workouts\/categories\/assign$/);
+});
