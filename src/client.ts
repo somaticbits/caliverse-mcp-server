@@ -27,13 +27,18 @@ export interface TokenProvider {
 
 export class CaliverseApi {
   private readonly fetchImpl: FetchLike;
+  private exercises: Promise<unknown> | undefined;
 
   public constructor(private readonly options: CaliverseApiOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   public listExercises(): Promise<unknown> {
-    return this.request("/exercises", { method: "GET" });
+    this.exercises ??= this.request("/exercises", { method: "GET" }).catch((error: unknown) => {
+      this.exercises = undefined;
+      throw error;
+    });
+    return this.exercises;
   }
 
   public listMyWorkouts(): Promise<unknown> {
@@ -62,13 +67,13 @@ export class CaliverseApi {
 
   public async createWorkout(input: WorkoutInput): Promise<unknown> {
     const created = await this.sendWorkout("/workouts/with-supersets", toApiWorkoutPayload(input, null));
-    await this.assignCategoriesIfPresent(created, input.categoryIds);
+    await this.assignCategories(created, input.categoryIds);
     return created;
   }
 
   public async updateWorkout(workoutId: number, input: WorkoutInput): Promise<unknown> {
     const updated = await this.sendWorkout(`/workouts/${workoutId}/with-supersets`, toApiWorkoutPayload(input, workoutId));
-    await this.assignCategoriesIfPresent(updated, input.categoryIds);
+    await this.assignCategories(updated, input.categoryIds);
     return updated;
   }
 
@@ -93,10 +98,7 @@ export class CaliverseApi {
     });
   }
 
-  private async assignCategoriesIfPresent(workout: unknown, categoryIds: number[]): Promise<void> {
-    if (categoryIds.length === 0) {
-      return;
-    }
+  private async assignCategories(workout: unknown, categoryIds: number[]): Promise<void> {
     if (typeof workout !== "object" || workout === null || typeof (workout as { id?: unknown }).id !== "number") {
       throw new Error("Workout was created, but its ID was not returned; categories were not assigned.");
     }

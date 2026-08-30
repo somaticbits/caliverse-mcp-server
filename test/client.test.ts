@@ -32,6 +32,59 @@ test("CaliverseApi retries once with a refreshed token after a 401", async () =>
   assert.equal(new Headers(requests[1]?.headers).get("X-USER-ID-TOKEN"), "new-token");
 });
 
+test("CaliverseApi caches exercises but clears the cache after a failed request", async () => {
+  let calls = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1 ? jsonResponse({ message: "temporary failure" }, 500) : jsonResponse([{ id: 1 }]);
+    }
+  });
+
+  await assert.rejects(api.listExercises(), CaliverseApiError);
+  assert.deepEqual(await api.listExercises(), [{ id: 1 }]);
+  assert.deepEqual(await api.listExercises(), [{ id: 1 }]);
+  assert.equal(calls, 2);
+});
+
+test("createWorkout assigns an empty category list to clear categories", async () => {
+  const requests: RequestInit[] = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (_url, init) => {
+      requests.push(init ?? {});
+      return requests.length === 1 ? jsonResponse({ id: 30 }) : jsonResponse({}, 201);
+    }
+  });
+
+  await api.createWorkout({
+    title: "Category test",
+    isPublic: false,
+    isPro: false,
+    lengthInMinutes: 5,
+    level: "beginner",
+    groupIds: [],
+    categoryIds: [],
+    supersets: [{
+      restBetweenCycles: 0,
+      orderInWorkout: 1,
+      title: "",
+      exercises: [{
+        exerciseId: 1,
+        setCount: 1,
+        repetitionCount: 1,
+        repetitionType: "count",
+        orderInWorkout: 1,
+        restTimeBeforeExercise: 0
+      }]
+    }]
+  });
+
+  assert.equal(requests.length, 2);
+  assert.equal(new URLSearchParams(String(requests[1]?.body)).get("workout_id"), "30");
+});
+
 test("CaliverseApi bounds API error content and preserves status", async () => {
   const api = new CaliverseApi({
     tokenManager: { async getIdToken() { return "token"; } },
