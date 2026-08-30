@@ -22,7 +22,8 @@ async function main(): Promise<void> {
   if (process.env.CALIVERSE_LIVE_MUTATION_TEST !== "1") {
     return;
   }
-  if (!Array.isArray(exercises) || exerciseId(exercises[0]) === undefined) {
+  const firstExerciseId = Array.isArray(exercises) ? exerciseId(exercises[0]) : undefined;
+  if (firstExerciseId === undefined) {
     throw new Error("Cannot run mutation smoke test: no usable exercise was returned.");
   }
   const level = process.env.CALIVERSE_TEST_LEVEL;
@@ -45,7 +46,7 @@ async function main(): Promise<void> {
         orderInWorkout: 1,
         title: "Smoke test",
         exercises: [{
-          exerciseId: exerciseId(exercises[0]),
+          exerciseId: firstExerciseId,
           setCount: 1,
           repetitionCount: 1,
           repetitionType: "count",

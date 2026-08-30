@@ -26,8 +26,8 @@ function appendValue(params: URLSearchParams, path: string, value: FormValue): v
 }
 
 /** Serializes nested values in the bracket notation Laravel/PHP expects. */
-export function toFormBody(value: { [key: string]: FormValue }): string {
+export function toFormBody(value: object): string {
   const params = new URLSearchParams();
-  appendValue(params, "", value);
+  appendValue(params, "", value as FormValue);
   return params.toString();
 }

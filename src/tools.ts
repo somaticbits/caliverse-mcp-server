@@ -130,7 +130,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   server.tool(
     "caliverse_create_workout",
     "Create a custom workout. Call caliverse_list_exercises first to obtain valid exercise IDs. level must match a value used by your existing workouts. This writes to your account and requires confirm: true.",
-    workoutInputSchema.extend({ confirm: z.literal(true) }),
+    { ...workoutInputSchema.shape, confirm: z.literal(true) },
     async ({ confirm: _confirm, ...input }) => {
       try {
         return textResult(await api.createWorkout(input));
@@ -143,7 +143,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   server.tool(
     "caliverse_update_workout",
     "Replace a custom workout's complete definition. Read it first, preserve fields you intend to keep, and pass confirm: true.",
-    workoutInputSchema.extend({ workoutId: z.number().int().positive(), confirm: z.literal(true) }),
+    { ...workoutInputSchema.shape, workoutId: z.number().int().positive(), confirm: z.literal(true) },
     async ({ workoutId, confirm: _confirm, ...input }) => {
       try {
         return textResult(await api.updateWorkout(workoutId, input));

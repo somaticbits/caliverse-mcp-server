@@ -1,4 +1,4 @@
-import { toFormBody, type FormValue } from "./serializer.js";
+import { toFormBody } from "./serializer.js";
 import { toApiWorkoutPayload, type WorkoutInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
@@ -85,7 +85,7 @@ export class CaliverseApi {
     return this.request("/workouts/with-supersets", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: toFormBody(clone as { [key: string]: FormValue })
+      body: toFormBody(clone)
     });
   }
 
@@ -93,7 +93,7 @@ export class CaliverseApi {
     return this.request(`/workouts/${workoutId}`, { method: "DELETE" });
   }
 
-  private async sendWorkout(endpoint: string, payload: { [key: string]: FormValue }): Promise<unknown> {
+  private async sendWorkout(endpoint: string, payload: object): Promise<unknown> {
     return this.request(endpoint, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
