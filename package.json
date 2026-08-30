@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test --experimental-test-coverage dist/test/*.test.js",
     "login": "pnpm build && node dist/scripts/login.js",
+    "login:google": "pnpm build && node dist/scripts/google-login.js",
     "smoke": "pnpm build && node dist/scripts/smoke.js"
   },
   "dependencies": {
