@@ -16,6 +16,7 @@ Do not open a public issue with credentials, tokens, or a reproducible exploit t
 - All writes require an explicit `confirm: true` input.
 - Runtime dependencies and the package manager are exact-pinned; `pnpm-lock.yaml` must be reviewed and committed with every dependency change.
 - `.npmrc` disables package lifecycle scripts. Installation should always use `pnpm install --frozen-lockfile --ignore-scripts`.
+- Google login uses a temporary loopback-only listener with a per-run nonce, CSP/no-cache headers, and SRI-pinned Firebase browser scripts. Its returned token is validated before being persisted.
 
 ## Dependency updates
 
