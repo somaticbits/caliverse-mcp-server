@@ -32,7 +32,9 @@ export function loginPage(nonce: string): string {
   <meta name="caliverse-login-nonce" content="${nonce}">
   <title>Caliverse Google Login</title>
 </head>
-<body><p id="status">Opening Google sign-in...</p>
+<body>
+<p id="status">Sign in with the Google account linked to Caliverse.</p>
+<button id="sign-in" type="button">Sign in with Google</button>
 <script src="https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app-compat.js" integrity="${FIREBASE_APP_SRI}" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth-compat.js" integrity="${FIREBASE_AUTH_SRI}" crossorigin="anonymous"></script>
 <script src="/app.js"></script>
@@ -42,6 +44,7 @@ export function loginPage(nonce: string): string {
 export function loginScript(): string {
   return `(() => {
   const status = document.getElementById("status");
+  const signInButton = document.getElementById("sign-in");
   const nonce = document.querySelector('meta[name="caliverse-login-nonce"]').content;
   const config = {
     apiKey: "REDACTED_FIREBASE_WEB_API_KEY",
@@ -50,15 +53,16 @@ export function loginScript(): string {
   };
   firebase.initializeApp(config);
   const auth = firebase.auth();
-  const fail = (error) => { status.textContent = "Google login failed: " + error.message; };
-  (async () => {
-    const result = await auth.getRedirectResult();
-    if (!result.user) {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      provider.addScope("email");
-      await auth.signInWithRedirect(provider);
-      return;
-    }
+  const fail = (error) => {
+    signInButton.disabled = false;
+    status.textContent = "Google login failed: " + error.message;
+  };
+  signInButton.addEventListener("click", async () => {
+    signInButton.disabled = true;
+    status.textContent = "Opening Google sign-in...";
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope("email");
+    const result = await auth.signInWithPopup(provider);
     const response = await fetch("/token", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -66,7 +70,7 @@ export function loginScript(): string {
     });
     if (!response.ok) throw new Error(await response.text());
     status.textContent = "Caliverse login complete. You may close this tab.";
-  })().catch(fail);
+  }).catch(fail);
 })();`;
 }
 

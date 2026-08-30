@@ -56,7 +56,7 @@ If your Caliverse account uses Google sign-in, run:
 pnpm login:google
 ```
 
-This opens a one-time loopback-only `localhost` page, then redirects through Caliverse's Firebase Google provider. Sign in only in the Google page opened by your browser. The local page uses Firebase 9.22.2 scripts with pinned SHA-384 Subresource Integrity hashes, has a restrictive CSP, accepts a single random-nonce-bound response, validates the resulting refresh token with Firebase, and stores only the rotated refresh token. It times out after five minutes.
+This opens a one-time loopback-only `localhost` page. Click its **Sign in with Google** button to open Firebase's Google sign-in popup. The local page uses Firebase 9.22.2 scripts with pinned SHA-384 Subresource Integrity hashes, has a restrictive CSP, accepts a single random-nonce-bound response, validates the resulting refresh token with Firebase, and stores only the rotated refresh token. It times out after five minutes.
 
 Do not paste a Google password, an ID token, or a refresh token into an MCP tool or chat. If the browser does not open, the command prints the local URL to stderr; open only that `http://localhost:<port>/` URL yourself.
 

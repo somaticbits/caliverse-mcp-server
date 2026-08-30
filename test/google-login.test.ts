@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isLoopbackAddress, loginPage, startGoogleLogin } from "../scripts/google-login.js";
+import { isLoopbackAddress, loginPage, loginScript, startGoogleLogin } from "../scripts/google-login.js";
 
 test("Google login page pins Firebase browser scripts with SRI", () => {
   const page = loginPage("nonce-value");
   assert.match(page, /content="nonce-value"/);
+  assert.match(page, /id="sign-in"/);
   assert.match(page, /firebase-app-compat\.js" integrity="sha384-/);
   assert.match(page, /firebase-auth-compat\.js" integrity="sha384-/);
   assert.doesNotMatch(page, /<script[^>]*>(?!<\/script>)/);
+  assert.match(loginScript(), /signInWithPopup/);
 });
 
 test("loopback filter accepts only local addresses", () => {
