@@ -8,10 +8,12 @@ This project is intentionally small: it uses the official MCP SDK, Zod, TypeScri
 
 - Search Caliverse's exercise library and inspect individual exercises.
 - List, read, create, update, clone, and delete custom workouts.
-- List workout categories, groups, and workout plans.
+- List workout categories, groups, favorites, and workout plans.
+- Read per-exercise progress signals (personal bests, last performed), day/calendar schedules, Smart Coach profile/today/history, active plan, and exercise progression trees.
+- Log a completed workout (auto-mapping library exercise IDs to the workout's internal slots) and delete a logged session.
 - Require `confirm: true` for every account mutation.
 
-The implementation was derived from Caliverse's public web dashboard behavior. It is unofficial, intended only for the authenticated account owner, and may need updates if Caliverse changes its API.
+The read/write endpoints for custom workouts and metadata were derived from Caliverse's public web dashboard behavior. The progress, coaching, schedule, and workout-logging endpoints were derived from observing the official iOS app's own network traffic to the same authenticated API (see `docs/ios-api-map.md`). All of this is unofficial, intended only for the authenticated account owner, and may need updates if Caliverse changes its API. Workout-log weight is recorded in kilograms only, and the completion-logging shape was verified from a single observed request that logged an entire workout at once; partial logs are unverified.
 
 ## Requirements
 

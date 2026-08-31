@@ -3,12 +3,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CaliverseApi } from "./client.js";
 import { omittedKeys, projectExercise, projectPlan, projectWorkout } from "./projection.js";
 import { fieldsSchema, pageSchema, pagedResult, textResult } from "./response.js";
-import { workoutInputSchema } from "./types.js";
+import { todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
 
 const readAnnotations = { readOnlyHint: true, openWorldHint: true };
+const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 const exerciseDetailSchema = z.enum(["summary", "full"]);
 const workoutDetailSchema = z.enum(["summary", "structure", "full"]);
 const planDetailSchema = z.enum(["summary", "full"]);
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format.");
 
 function errorResult(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown Caliverse MCP error.";
@@ -154,5 +156,142 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
   }, async ({ workoutId }) => {
     try { return textResult(await api.deleteWorkout(workoutId)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_progress_signals", {
+    title: "Get Caliverse Progress Signals",
+    description: "Get per-exercise progress: personal-best reps/weight, current best, set/rep counts, and when each exercise was last performed.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getProgressSignals()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_my_day", {
+    title: "Get Caliverse Day Schedule",
+    description: "Get one day's scheduled, missed, attended, and finished workouts. date defaults to today (YYYY-MM-DD).",
+    inputSchema: { date: dateSchema.default(() => todayDateString()) },
+    annotations: readAnnotations
+  }, async ({ date }) => {
+    try { return textResult(await api.getMyDay(date)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_schedule_calendar", {
+    title: "Get Caliverse Schedule Calendar",
+    description: "Get the dates with scheduled workouts within a date range (YYYY-MM-DD, inclusive).",
+    inputSchema: { dateFrom: dateSchema, dateTo: dateSchema },
+    annotations: readAnnotations
+  }, async ({ dateFrom, dateTo }) => {
+    try { return textResult(await api.getScheduleCalendar(dateFrom, dateTo)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_coach_profile", {
+    title: "Get Smart Coach Profile",
+    description: "Get the Smart Coach profile: goal, experience level, training days per week, and coaching notes.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getCoachProfile()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_coach_today", {
+    title: "Get Smart Coach Today",
+    description: "Get today's Smart Coach-assigned workout.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getCoachToday()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_coach_history", {
+    title: "Get Smart Coach History",
+    description: "Get Smart Coach-assigned workouts within a date range (YYYY-MM-DD, inclusive).",
+    inputSchema: { from: dateSchema, to: dateSchema },
+    annotations: readAnnotations
+  }, async ({ from, to }) => {
+    try { return textResult(await api.getCoachHistory(from, to)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_active_plan", {
+    title: "Get Active Caliverse Plan",
+    description: "Get the currently active workout plan, if any.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getActivePlan()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_progression_tree", {
+    title: "Get Exercise Progression Tree",
+    description: "Get the regression/progression ladder of exercises related to one exercise ID.",
+    inputSchema: { exerciseId: z.number().int().positive() },
+    annotations: readAnnotations
+  }, async ({ exerciseId }) => {
+    try { return textResult(await api.getProgressionTree(exerciseId)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_list_muscle_groups", {
+    title: "List Muscle Groups",
+    description: "List Caliverse's muscle-group catalog (id and title).",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.listMuscleGroups()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_my_workout_rating", {
+    title: "Get My Workout Rating",
+    description: "Get the account's own rating for one workout (distinct from the workout's average rating/rating_count).",
+    inputSchema: { workoutId: z.number().int().positive() },
+    annotations: readAnnotations
+  }, async ({ workoutId }) => {
+    try { return textResult(await api.getMyWorkoutRating(workoutId)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_list_favorite_workouts", {
+    title: "List Favorite Workouts",
+    description: "List workouts favorited by the account. Default detail is summary; use offset and nextOffset to page.",
+    inputSchema: { query: z.string().trim().min(1).max(100).optional(), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
+    annotations: readAnnotations
+  }, async ({ query, offset, limit, detail, fields }) => {
+    try {
+      const workouts = await api.listFavoriteWorkouts();
+      if (!Array.isArray(workouts)) return textResult(workouts);
+      const normalizedQuery = query?.toLocaleLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_log_feedback_options", {
+    title: "Get Workout Log Feedback Options",
+    description: "Get the fixed post-workout feedback questions and their allowed answers.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getLogFeedbackOptions()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_log_workout_completion", {
+    title: "Log a Completed Caliverse Workout",
+    description: [
+      "Log a completed workout session so it counts toward history, streaks, and progress signals.",
+      "Identify each exercise performed by its library exerciseId (from caliverse_get_workout or caliverse_list_exercises) and list its sets in order; this tool resolves each exerciseId to its position-specific slot in the workout automatically.",
+      "Weight is recorded in kilograms only. Timestamps accept \"YYYY-MM-DD HH:mm:ss\" (local time) or an ISO 8601 string; per-set timestamps are optional and default to the overall session start/finish.",
+      "This was derived from a single observed mobile-app request that logged an entire workout at once; behavior for partial logs (not every exercise/set in the workout) has not been verified. Requires confirm: true."
+    ].join(" "),
+    inputSchema: { ...workoutLogInputSchema.shape, confirm: z.literal(true) },
+    annotations: writeAnnotations
+  }, async ({ confirm: _confirm, ...input }) => {
+    try { return textResult(await api.logWorkoutCompletion(input)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_delete_workout_log", {
+    title: "Delete a Workout Log",
+    description: "Delete a previously logged completed workout session by its log ID. Requires confirm: true.",
+    inputSchema: { logId: z.number().int().positive(), confirm: z.literal(true) },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+  }, async ({ logId }) => {
+    try { return textResult(await api.deleteWorkoutLog(logId)); } catch (error) { return errorResult(error); }
   });
 }
