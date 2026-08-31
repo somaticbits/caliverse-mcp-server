@@ -160,7 +160,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
 
   server.registerTool("caliverse_get_progress_signals", {
     title: "Get Caliverse Progress Signals",
-    description: "Get per-exercise progress: personal-best reps/weight, current best, set/rep counts, and when each exercise was last performed.",
+    description: "Get progress signals only for exercises in today's Smart Coach workout. tier_b reports a personal-best change when one occurred; tier_c reports the most recent performance, not an all-time record.",
     inputSchema: {},
     annotations: readAnnotations
   }, async () => {
