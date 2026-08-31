@@ -85,6 +85,72 @@ test("createWorkout assigns an empty category list to clear categories", async (
   assert.equal(new URLSearchParams(String(requests[1]?.body)).get("workout_id"), "30");
 });
 
+test("createPlan sends the captured JSON shape and returns a compact summary", async () => {
+  let requestUrl = "";
+  let requestInit: RequestInit | undefined;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => {
+      requestUrl = url;
+      requestInit = init;
+      return jsonResponse({
+        id: 287,
+        title: "Test plan",
+        description: "A response much larger than the MCP result limit would be omitted here.",
+        level: "intermediate",
+        week_count: 1,
+        owner_type: "user",
+        plan_type: "DEFAULT",
+        is_owned_by_current_user: true,
+        levels: [{ workouts: [{ id: 1, workout: { id: 503 } }] }]
+      }, 201);
+    }
+  });
+
+  const created = await api.createPlan({
+    title: "Test plan",
+    description: "Test description",
+    level: "intermediate",
+    weekCount: 1,
+    levels: [{
+      title: "One",
+      description: "Two",
+      lengthInWeeks: 1,
+      orderInPlan: 1,
+      workouts: [{ workoutId: 503, dayOfWeek: 1 }]
+    }]
+  });
+
+  assert.equal(requestUrl, "https://www.caliverse.app/api/v1/workouts/plans");
+  assert.equal(new Headers(requestInit?.headers).get("content-type"), "application/json");
+  assert.deepEqual(JSON.parse(String(requestInit?.body)), {
+    owner_type: "user",
+    description: "Test description",
+    image_url: null,
+    workout_plan_id: 0,
+    level: "intermediate",
+    week_count: 1,
+    title: "Test plan",
+    levels: [{
+      description: "Two",
+      length_in_weeks: 1,
+      workout_plan_level_id: 0,
+      title: "One",
+      order_in_plan: 1,
+      workouts: [{ day_of_week: 1, workout_id: 503, workout_plan_level_workout_id: 0 }]
+    }]
+  });
+  assert.deepEqual(created, {
+    id: 287,
+    title: "Test plan",
+    level: "intermediate",
+    week_count: 1,
+    plan_type: "DEFAULT",
+    is_owned_by_current_user: true,
+    owner_type: "user"
+  });
+});
+
 test("plan reads use the extended timeout", async () => {
   let signal: AbortSignal | undefined;
   const api = new CaliverseApi({
@@ -131,6 +197,11 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
   await api.getWorkoutFilters();
   await api.getSubscription();
   await api.getScheduleCalendar("2026-08-01", "2026-08-31");
+  await api.getAvailableDays();
+  await api.getUserProperties();
+  await api.listWorkoutGoals();
+  await api.listFeaturedWorkouts();
+  await api.listGeneratedWorkouts(5);
   await api.getCoachProfile();
   await api.getCoachToday();
   await api.getCoachHistory("2026-08-30", "2026-08-30");
@@ -148,6 +219,11 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
     "https://www.caliverse.app/api/v1/workouts/filters",
     "https://www.caliverse.app/api/v1/users/subscriptions/verify",
     "https://www.caliverse.app/api/v1/workouts/schedules/calendar?date_from=2026-08-01&date_to=2026-08-31",
+    "https://www.caliverse.app/api/v1/users/me/available-days",
+    "https://www.caliverse.app/api/v1/users/me/properties",
+    "https://www.caliverse.app/api/v1/workouts/goals/root",
+    "https://www.caliverse.app/api/v1/workouts/featured",
+    "https://www.caliverse.app/api/v1/workouts/generated?limit=5",
     "https://www.caliverse.app/api/v1/ai-coach/profile",
     "https://www.caliverse.app/api/v1/ai-coach/today",
     "https://www.caliverse.app/api/v1/ai-coach/history?from=2026-08-30&to=2026-08-30",
@@ -342,6 +418,35 @@ test("deleteWorkoutLog issues a DELETE to the log endpoint", async () => {
   await api.deleteWorkoutLog(621939);
   assert.match(requests[0]?.url ?? "", /\/workouts\/log\/621939$/);
   assert.equal(requests[0]?.init?.method, "DELETE");
+});
+
+test("deleteWorkoutPlan checks the active plan before issuing DELETE", async () => {
+  const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return requests.length === 1 ? jsonResponse({ id: 12 }) : new Response(null, { status: 204 });
+    }
+  });
+
+  await api.deleteWorkoutPlan(34);
+  assert.deepEqual(requests.map((request) => request.url), [
+    "https://www.caliverse.app/api/v1/workouts/plans/mine/active",
+    "https://www.caliverse.app/api/v1/workouts/plans/34"
+  ]);
+  assert.equal(requests[1]?.init?.method, "DELETE");
+});
+
+test("deleteWorkoutPlan refuses to delete the active plan", async () => {
+  let requests = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => { requests += 1; return jsonResponse({ id: 34 }); }
+  });
+
+  await assert.rejects(api.deleteWorkoutPlan(34), /is active and cannot be deleted/);
+  assert.equal(requests, 1);
 });
 
 test("cloneWorkout converts the read shape into the write payload", async () => {

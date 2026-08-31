@@ -8,8 +8,8 @@ This project is intentionally small: it uses the official MCP SDK, Zod, TypeScri
 
 - Search Caliverse's exercise library and inspect individual exercises.
 - List, read, create, update, clone, and delete custom workouts.
-- List workout categories, groups, favorites, and workout plans.
-- Read per-exercise progress signals (personal bests, last performed), day/calendar schedules, Smart Coach profile/today/history, active plan, and exercise progression trees.
+- List workout categories, groups, favorites, featured/generated workouts, workout goals, and workout plans; create custom workout plans.
+- Read per-exercise progress signals (personal bests, last performed), account training days and workout-generation settings, day/calendar schedules, Smart Coach profile/today/history, active plan, and exercise progression trees.
 - Log a completed workout (auto-mapping library exercise IDs to the workout's internal slots) and delete a logged session.
 - Require `confirm: true` for every account mutation.
 

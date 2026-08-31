@@ -38,6 +38,52 @@ export const workoutInputSchema = z.object({
 
 export type WorkoutInput = z.infer<typeof workoutInputSchema>;
 
+export const planLevelWorkoutSchema = z.object({
+  workoutId: z.number().int().positive(),
+  dayOfWeek: z.number().int().min(1).max(7)
+});
+
+export const planLevelSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(2_000).optional(),
+  lengthInWeeks: z.number().int().positive(),
+  orderInPlan: z.number().int().positive(),
+  workouts: z.array(planLevelWorkoutSchema).min(1)
+});
+
+export const planInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(2_000).optional(),
+  level: z.string().trim().min(1).max(100),
+  weekCount: z.number().int().positive(),
+  imageUrl: z.string().url().nullable().optional(),
+  levels: z.array(planLevelSchema).min(1)
+});
+
+export type PlanInput = z.infer<typeof planInputSchema>;
+
+export interface ApiPlanPayload {
+  owner_type: "user";
+  description: string;
+  image_url: string | null;
+  workout_plan_id: 0;
+  level: string;
+  week_count: number;
+  title: string;
+  levels: Array<{
+    description: string;
+    length_in_weeks: number;
+    workout_plan_level_id: 0;
+    title: string;
+    order_in_plan: number;
+    workouts: Array<{
+      day_of_week: number;
+      workout_id: number;
+      workout_plan_level_workout_id: 0;
+    }>;
+  }>;
+}
+
 export interface ApiWorkoutExercise {
   exercise_id: number;
   set_count: number;
@@ -377,6 +423,30 @@ export function toApiWorkoutPayload(input: WorkoutInput, workoutId: number | nul
         order_in_workout: exercise.orderInWorkout,
         rest_time_before_exercise: exercise.restTimeBeforeExercise,
         ...(exercise.description === undefined ? {} : { description: exercise.description })
+      }))
+    }))
+  };
+}
+
+export function toApiPlanPayload(input: PlanInput): ApiPlanPayload {
+  return {
+    owner_type: "user",
+    description: input.description ?? "",
+    image_url: input.imageUrl ?? null,
+    workout_plan_id: 0,
+    level: input.level,
+    week_count: input.weekCount,
+    title: input.title,
+    levels: input.levels.map((level) => ({
+      description: level.description ?? "",
+      length_in_weeks: level.lengthInWeeks,
+      workout_plan_level_id: 0,
+      title: level.title,
+      order_in_plan: level.orderInPlan,
+      workouts: level.workouts.map((workout) => ({
+        day_of_week: workout.dayOfWeek,
+        workout_id: workout.workoutId,
+        workout_plan_level_workout_id: 0
       }))
     }))
   };

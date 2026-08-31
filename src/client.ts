@@ -1,5 +1,6 @@
 import { toFormBody } from "./serializer.js";
-import { collectExercisePrs, mapWorkoutLogToApiPayload, toApiWorkoutPayload, workoutInputSchema, type ExercisePrCollection, type WorkoutInput, type WorkoutLogInput } from "./types.js";
+import { planSummary } from "./projection.js";
+import { collectExercisePrs, mapWorkoutLogToApiPayload, toApiPlanPayload, toApiWorkoutPayload, workoutInputSchema, type ExercisePrCollection, type PlanInput, type WorkoutInput, type WorkoutLogInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
@@ -74,6 +75,14 @@ export class CaliverseApi {
     return this.request(`/workouts/plans/${planId}`, { method: "GET" }, false, PLAN_TIMEOUT_MS);
   }
 
+  public async createPlan(input: PlanInput): Promise<unknown> {
+    const created = await this.postJson("/workouts/plans", toApiPlanPayload(input));
+    if (typeof created !== "object" || created === null || Array.isArray(created)) {
+      throw new Error("Caliverse returned an invalid created workout plan.");
+    }
+    return planSummary(created);
+  }
+
   public async createWorkout(input: WorkoutInput): Promise<unknown> {
     const created = await this.sendWorkout("/workouts/with-supersets", toApiWorkoutPayload(input, null));
     await this.assignCategories(created, input.categoryIds);
@@ -97,6 +106,14 @@ export class CaliverseApi {
 
   public deleteWorkout(workoutId: number): Promise<unknown> {
     return this.request(`/workouts/${workoutId}`, { method: "DELETE" });
+  }
+
+  public async deleteWorkoutPlan(planId: number): Promise<unknown> {
+    const activePlan = await this.getActivePlan();
+    if (typeof activePlan === "object" && activePlan !== null && (activePlan as { id?: unknown }).id === planId) {
+      throw new Error(`Workout plan ${planId} is active and cannot be deleted. Deactivate it in Caliverse first.`);
+    }
+    return this.request(`/workouts/plans/${planId}`, { method: "DELETE" });
   }
 
   public listMuscleGroups(): Promise<unknown> {
@@ -186,6 +203,26 @@ export class CaliverseApi {
 
   public getScheduleCalendar(dateFrom: string, dateTo: string): Promise<unknown> {
     return this.request(`/workouts/schedules/calendar?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`, { method: "GET" });
+  }
+
+  public getAvailableDays(): Promise<unknown> {
+    return this.request("/users/me/available-days", { method: "GET" });
+  }
+
+  public getUserProperties(): Promise<unknown> {
+    return this.request("/users/me/properties", { method: "GET" });
+  }
+
+  public listWorkoutGoals(): Promise<unknown> {
+    return this.request("/workouts/goals/root", { method: "GET" });
+  }
+
+  public listFeaturedWorkouts(): Promise<unknown> {
+    return this.request("/workouts/featured", { method: "GET" });
+  }
+
+  public listGeneratedWorkouts(limit: number): Promise<unknown> {
+    return this.request(`/workouts/generated?limit=${encodeURIComponent(limit)}`, { method: "GET" });
   }
 
   public getCoachProfile(): Promise<unknown> {

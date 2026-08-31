@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectExercisePrs, mapWorkoutLogToApiPayload, toCaliverseDateTime, todayDateString, workoutLogInputSchema } from "../src/types.js";
+import { collectExercisePrs, mapWorkoutLogToApiPayload, planInputSchema, toApiPlanPayload, toCaliverseDateTime, todayDateString, workoutLogInputSchema } from "../src/types.js";
 
 function sampleWorkout(): unknown {
   return {
@@ -48,6 +48,61 @@ test("todayDateString formats an injected clock as YYYY-MM-DD", () => {
 
 test("todayDateString defaults to the current date", () => {
   assert.match(todayDateString(), /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("toApiPlanPayload maps a new plan to Caliverse's JSON shape", () => {
+  const input = planInputSchema.parse({
+    title: "Test plan",
+    description: "Test description",
+    imageUrl: "https://assets.caliverse.app/images/plans/default.jpg",
+    level: "intermediate",
+    weekCount: 1,
+    levels: [{
+      title: "One",
+      description: "Two",
+      lengthInWeeks: 1,
+      orderInPlan: 1,
+      workouts: [
+        { workoutId: 4732, dayOfWeek: 2 },
+        { workoutId: 503, dayOfWeek: 1 }
+      ]
+    }]
+  });
+
+  assert.deepEqual(toApiPlanPayload(input), {
+    owner_type: "user",
+    description: "Test description",
+    image_url: "https://assets.caliverse.app/images/plans/default.jpg",
+    workout_plan_id: 0,
+    level: "intermediate",
+    week_count: 1,
+    title: "Test plan",
+    levels: [{
+      description: "Two",
+      length_in_weeks: 1,
+      workout_plan_level_id: 0,
+      title: "One",
+      order_in_plan: 1,
+      workouts: [
+        { day_of_week: 2, workout_id: 4732, workout_plan_level_workout_id: 0 },
+        { day_of_week: 1, workout_id: 503, workout_plan_level_workout_id: 0 }
+      ]
+    }]
+  });
+});
+
+test("planInputSchema rejects invalid weekday and empty plan collections", () => {
+  const input = {
+    title: "Plan",
+    level: "beginner",
+    weekCount: 1,
+    levels: [{ title: "Level", lengthInWeeks: 1, orderInPlan: 1, workouts: [{ workoutId: 1, dayOfWeek: 1 }] }]
+  };
+
+  assert.throws(() => planInputSchema.parse({ ...input, levels: [] }));
+  assert.throws(() => planInputSchema.parse({ ...input, levels: [{ ...input.levels[0], workouts: [] }] }));
+  assert.throws(() => planInputSchema.parse({ ...input, levels: [{ ...input.levels[0], workouts: [{ workoutId: 1, dayOfWeek: 0 }] }] }));
+  assert.throws(() => planInputSchema.parse({ ...input, levels: [{ ...input.levels[0], workouts: [{ workoutId: 1, dayOfWeek: 8 }] }] }));
 });
 
 test("collectExercisePrs aggregates completed sessions without mixing repetition types or weight units", () => {
