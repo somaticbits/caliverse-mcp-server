@@ -80,3 +80,15 @@ test("TokenManager does not persist an unchanged refresh token", async () => {
   await manager.getIdToken();
   assert.equal(persisted, false);
 });
+
+test("TokenManager shares an in-flight refresh across concurrent callers", async () => {
+  let calls = 0;
+  const manager = new TokenManager("initial", async () => {
+    calls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return jsonResponse({ id_token: "token", refresh_token: "refresh", expires_in: "3600" });
+  });
+
+  assert.deepEqual(await Promise.all([manager.getIdToken(), manager.getIdToken(), manager.getIdToken()]), ["token", "token", "token"]);
+  assert.equal(calls, 1);
+});
