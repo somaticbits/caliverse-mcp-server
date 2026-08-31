@@ -1,11 +1,14 @@
 import { toFormBody } from "./serializer.js";
-import { toApiWorkoutPayload, workoutInputSchema, type WorkoutInput } from "./types.js";
+import { collectExercisePrs, mapWorkoutLogToApiPayload, toApiWorkoutPayload, workoutInputSchema, type ExercisePrCollection, type WorkoutInput, type WorkoutLogInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
 const MAX_ERROR_BODY_LENGTH = 1_000;
 const DEFAULT_TIMEOUT_MS = 20_000;
-const PLAN_TIMEOUT_MS = 60_000;
+const PLAN_TIMEOUT_MS = 45_000;
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const MAX_PR_SCAN_DAYS = 120;
+const PR_SCAN_CONCURRENCY = 5;
 
 export class CaliverseApiError extends Error {
   public constructor(
@@ -63,6 +66,10 @@ export class CaliverseApi {
     return this.request("/workouts/plans", { method: "GET" }, false, PLAN_TIMEOUT_MS);
   }
 
+  public listPlansShort(): Promise<unknown> {
+    return this.request("/workouts/plans/short?include_mine=1", { method: "GET" });
+  }
+
   public getPlan(planId: number): Promise<unknown> {
     return this.request(`/workouts/plans/${planId}`, { method: "GET" }, false, PLAN_TIMEOUT_MS);
   }
@@ -92,11 +99,116 @@ export class CaliverseApi {
     return this.request(`/workouts/${workoutId}`, { method: "DELETE" });
   }
 
+  public listMuscleGroups(): Promise<unknown> {
+    return this.request("/muscle-groups", { method: "GET" });
+  }
+
+  public getProgressSignals(): Promise<unknown> {
+    return this.request("/ai-coach/today/progress-signals", { method: "GET" });
+  }
+
+  public getMyDay(date: string): Promise<unknown> {
+    return this.request(`/users/me/my-day?date=${encodeURIComponent(date)}`, { method: "GET" });
+  }
+
+  public async getAvailableEquipment(): Promise<Array<{ id: number; title: string }>> {
+    const account = await this.request("/users/me", { method: "GET" });
+    if (typeof account !== "object" || account === null || !Array.isArray((account as { available_equipments?: unknown }).available_equipments)) {
+      throw new Error("Caliverse returned an invalid account equipment list.");
+    }
+    return (account as { available_equipments: unknown[] }).available_equipments.flatMap((equipment) => {
+      if (typeof equipment !== "object" || equipment === null) {
+        return [];
+      }
+      const { id, title } = equipment as { id?: unknown; title?: unknown };
+      return typeof id === "number" && Number.isInteger(id) && id > 0 && typeof title === "string" ? [{ id, title }] : [];
+    });
+  }
+
+  public getWorkoutFilters(): Promise<unknown> {
+    return this.request("/workouts/filters", { method: "GET" });
+  }
+
+  public getSubscription(): Promise<unknown> {
+    return this.request("/users/subscriptions/verify", { method: "GET" });
+  }
+
+  public async getExercisePrs(from: string, to: string): Promise<ExercisePrCollection & { from: string; to: string; daysScanned: number }> {
+    const dates = this.dateRange(from, to);
+    if (dates.length > MAX_PR_SCAN_DAYS) {
+      throw new Error(`Exercise PR scans are limited to ${MAX_PR_SCAN_DAYS} days per request. Split ${from} through ${to} into smaller ranges.`);
+    }
+    const days: unknown[] = new Array(dates.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (nextIndex < dates.length) {
+        const index = nextIndex++;
+        days[index] = await this.getMyDay(dates[index]!);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PR_SCAN_CONCURRENCY, dates.length) }, worker));
+    return { ...collectExercisePrs(days), from, to, daysScanned: dates.length };
+  }
+
+  public getScheduleCalendar(dateFrom: string, dateTo: string): Promise<unknown> {
+    return this.request(`/workouts/schedules/calendar?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`, { method: "GET" });
+  }
+
+  public getCoachProfile(): Promise<unknown> {
+    return this.request("/ai-coach/profile", { method: "GET" });
+  }
+
+  public getCoachToday(): Promise<unknown> {
+    return this.request("/ai-coach/today", { method: "GET" });
+  }
+
+  public getCoachHistory(from: string, to: string): Promise<unknown> {
+    return this.request(`/ai-coach/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { method: "GET" });
+  }
+
+  public getActivePlan(): Promise<unknown> {
+    return this.request("/workouts/plans/mine/active", { method: "GET" });
+  }
+
+  public getProgressionTree(exerciseId: number): Promise<unknown> {
+    return this.request(`/exercises/${exerciseId}/progression-tree`, { method: "GET" });
+  }
+
+  public getMyWorkoutRating(workoutId: number): Promise<unknown> {
+    return this.request(`/workouts/${workoutId}/rating`, { method: "GET" });
+  }
+
+  public listFavoriteWorkouts(): Promise<unknown> {
+    return this.request("/workouts/favorite", { method: "GET" });
+  }
+
+  public getLogFeedbackOptions(): Promise<unknown> {
+    return this.request("/workouts/log/feedback/options", { method: "GET" });
+  }
+
+  public async logWorkoutCompletion(input: WorkoutLogInput): Promise<unknown> {
+    const workout = await this.getWorkout(input.workoutId);
+    const payload = mapWorkoutLogToApiPayload(workout, input);
+    return this.postJson("/workouts/log/finish-with-exercises", payload);
+  }
+
+  public deleteWorkoutLog(logId: number): Promise<unknown> {
+    return this.request(`/workouts/log/${logId}`, { method: "DELETE" });
+  }
+
   private async sendWorkout(endpoint: string, payload: object): Promise<unknown> {
     return this.request(endpoint, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: toFormBody(payload)
+    });
+  }
+
+  private async postJson(endpoint: string, payload: object): Promise<unknown> {
+    return this.request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
     });
   }
 
@@ -174,6 +286,26 @@ export class CaliverseApi {
     return undefined;
   }
 
+  private dateRange(from: string, to: string): string[] {
+    const parse = (value: string): Date => {
+      const date = new Date(`${value}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+        throw new Error(`"${value}" is not a valid YYYY-MM-DD date.`);
+      }
+      return date;
+    };
+    const start = parse(from);
+    const end = parse(to);
+    if (start > end) {
+      throw new Error("Exercise PR scan start date must be on or before the end date.");
+    }
+    const dates: string[] = [];
+    for (const current = new Date(start); current <= end; current.setUTCDate(current.getUTCDate() + 1)) {
+      dates.push(current.toISOString().slice(0, 10));
+    }
+    return dates;
+  }
+
   private async request(endpoint: string, init: RequestInit, retried = false, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {
     const token = await this.options.tokenManager.getIdToken(retried);
     const response = await this.fetchImpl(`${API_BASE_URL}${endpoint}`, {
@@ -190,7 +322,14 @@ export class CaliverseApi {
       return this.request(endpoint, init, true, timeoutMs);
     }
 
+    const contentLength = response.headers.get("content-length");
+    if (contentLength !== null && Number(contentLength) > MAX_RESPONSE_BYTES) {
+      throw new CaliverseApiError(response.status, endpoint, `Caliverse API response from ${endpoint} exceeds the ${MAX_RESPONSE_BYTES}-byte safety limit.`);
+    }
     const text = await response.text();
+    if (Buffer.byteLength(text, "utf8") > MAX_RESPONSE_BYTES) {
+      throw new CaliverseApiError(response.status, endpoint, `Caliverse API response from ${endpoint} exceeds the ${MAX_RESPONSE_BYTES}-byte safety limit.`);
+    }
     if (!response.ok) {
       throw new CaliverseApiError(
         response.status,

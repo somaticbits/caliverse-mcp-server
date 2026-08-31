@@ -108,6 +108,7 @@ export async function refreshSession(
 
 export class TokenManager {
   private session: AuthSession | undefined;
+  private refreshInFlight: Promise<AuthSession> | undefined;
 
   public constructor(
     private refreshToken: string,
@@ -122,16 +123,23 @@ export class TokenManager {
     }
 
     const previousRefreshToken = this.refreshToken;
-    this.session = await refreshSession(previousRefreshToken, this.fetchImpl, this.now);
-    this.refreshToken = this.session.refreshToken;
-    if (this.refreshToken !== previousRefreshToken && this.onRefreshToken !== undefined) {
-      try {
-        await this.onRefreshToken(this.refreshToken);
-      } catch {
-        // Token persistence must not interrupt an otherwise valid API request.
-      }
-    }
-    return this.session.idToken;
+    this.refreshInFlight ??= refreshSession(previousRefreshToken, this.fetchImpl, this.now)
+      .then(async (session) => {
+        this.session = session;
+        this.refreshToken = session.refreshToken;
+        if (this.refreshToken !== previousRefreshToken && this.onRefreshToken !== undefined) {
+          try {
+            await this.onRefreshToken(this.refreshToken);
+          } catch {
+            // Token persistence must not interrupt an otherwise valid API request.
+          }
+        }
+        return session;
+      })
+      .finally(() => {
+        this.refreshInFlight = undefined;
+      });
+    return (await this.refreshInFlight).idToken;
   }
 
   public getRefreshToken(): string {
