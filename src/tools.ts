@@ -164,6 +164,13 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try { return textResult(await api.deleteWorkout(workoutId)); } catch (error) { return errorResult(error); }
   });
 
+  server.registerTool("caliverse_delete_workout_plan", {
+    title: "Delete Caliverse Workout Plan", description: "Permanently delete a custom workout plan. Refuses to delete the active plan; deactivate it in Caliverse first. Requires confirm: true.", inputSchema: { planId: z.number().int().positive(), confirm: z.literal(true) },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+  }, async ({ planId }) => {
+    try { return textResult(await api.deleteWorkoutPlan(planId)); } catch (error) { return errorResult(error); }
+  });
+
   server.registerTool("caliverse_get_progress_signals", {
     title: "Get Caliverse Progress Signals",
     description: "Get progress signals only for exercises in today's Smart Coach workout. tier_b reports a personal-best change when one occurred; tier_c reports the most recent performance, not an all-time record.",

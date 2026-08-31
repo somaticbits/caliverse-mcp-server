@@ -344,6 +344,35 @@ test("deleteWorkoutLog issues a DELETE to the log endpoint", async () => {
   assert.equal(requests[0]?.init?.method, "DELETE");
 });
 
+test("deleteWorkoutPlan checks the active plan before issuing DELETE", async () => {
+  const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return requests.length === 1 ? jsonResponse({ id: 12 }) : new Response(null, { status: 204 });
+    }
+  });
+
+  await api.deleteWorkoutPlan(34);
+  assert.deepEqual(requests.map((request) => request.url), [
+    "https://www.caliverse.app/api/v1/workouts/plans/mine/active",
+    "https://www.caliverse.app/api/v1/workouts/plans/34"
+  ]);
+  assert.equal(requests[1]?.init?.method, "DELETE");
+});
+
+test("deleteWorkoutPlan refuses to delete the active plan", async () => {
+  let requests = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => { requests += 1; return jsonResponse({ id: 34 }); }
+  });
+
+  await assert.rejects(api.deleteWorkoutPlan(34), /is active and cannot be deleted/);
+  assert.equal(requests, 1);
+});
+
 test("cloneWorkout converts the read shape into the write payload", async () => {
   const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
   const responses = [

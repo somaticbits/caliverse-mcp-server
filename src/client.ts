@@ -99,6 +99,14 @@ export class CaliverseApi {
     return this.request(`/workouts/${workoutId}`, { method: "DELETE" });
   }
 
+  public async deleteWorkoutPlan(planId: number): Promise<unknown> {
+    const activePlan = await this.getActivePlan();
+    if (typeof activePlan === "object" && activePlan !== null && (activePlan as { id?: unknown }).id === planId) {
+      throw new Error(`Workout plan ${planId} is active and cannot be deleted. Deactivate it in Caliverse first.`);
+    }
+    return this.request(`/workouts/plans/${planId}`, { method: "DELETE" });
+  }
+
   public listMuscleGroups(): Promise<unknown> {
     return this.request("/muscle-groups", { method: "GET" });
   }
