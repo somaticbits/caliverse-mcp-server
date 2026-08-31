@@ -114,6 +114,103 @@ test("CaliverseApi bounds API error content and preserves status", async () => {
   });
 });
 
+test("read-only progress and coaching methods call the expected endpoints", async () => {
+  const requests: string[] = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url) => { requests.push(url); return jsonResponse({}); }
+  });
+
+  await api.listMuscleGroups();
+  await api.getProgressSignals();
+  await api.getMyDay("2026-08-31");
+  await api.getScheduleCalendar("2026-08-01", "2026-08-31");
+  await api.getCoachProfile();
+  await api.getCoachToday();
+  await api.getCoachHistory("2026-08-30", "2026-08-30");
+  await api.getActivePlan();
+  await api.getProgressionTree(250);
+  await api.getMyWorkoutRating(131);
+  await api.listFavoriteWorkouts();
+  await api.getLogFeedbackOptions();
+
+  assert.deepEqual(requests, [
+    "https://www.caliverse.app/api/v1/muscle-groups",
+    "https://www.caliverse.app/api/v1/ai-coach/today/progress-signals",
+    "https://www.caliverse.app/api/v1/users/me/my-day?date=2026-08-31",
+    "https://www.caliverse.app/api/v1/workouts/schedules/calendar?date_from=2026-08-01&date_to=2026-08-31",
+    "https://www.caliverse.app/api/v1/ai-coach/profile",
+    "https://www.caliverse.app/api/v1/ai-coach/today",
+    "https://www.caliverse.app/api/v1/ai-coach/history?from=2026-08-30&to=2026-08-30",
+    "https://www.caliverse.app/api/v1/workouts/plans/mine/active",
+    "https://www.caliverse.app/api/v1/exercises/250/progression-tree",
+    "https://www.caliverse.app/api/v1/workouts/131/rating",
+    "https://www.caliverse.app/api/v1/workouts/favorite",
+    "https://www.caliverse.app/api/v1/workouts/log/feedback/options"
+  ]);
+});
+
+test("logWorkoutCompletion fetches the workout, maps it, and POSTs JSON", async () => {
+  const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      if (requests.length === 1) {
+        return jsonResponse({
+          id: 131,
+          supersets: [{
+            id: 1,
+            workout_exercises: [{ id: 10957, order_in_workout: 1, exercise: { id: 59 } }]
+          }]
+        });
+      }
+      return jsonResponse({ id: 621939 }, 201);
+    }
+  });
+
+  const result = await api.logWorkoutCompletion({
+    workoutId: 131,
+    startedAt: "2026-08-31 10:32:33",
+    finishedAt: "2026-08-31 10:33:06",
+    exercises: [{ exerciseId: 59, sets: [{ repetitionCount: 15, addedWeightKg: 0, restSecondsBefore: 0 }] }]
+  });
+
+  assert.deepEqual(result, { id: 621939 });
+  assert.equal(requests.length, 2);
+  assert.match(requests[0]?.url ?? "", /\/workouts\/131$/);
+  assert.match(requests[1]?.url ?? "", /\/workouts\/log\/finish-with-exercises$/);
+  assert.equal(new Headers(requests[1]?.init?.headers).get("content-type"), "application/json");
+  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
+    workout_id: 131,
+    started_at: "2026-08-31 10:32:33",
+    finished_at: "2026-08-31 10:33:06",
+    workout_exercise_logs: [{
+      order_in_workout: 1,
+      started_at: "2026-08-31 10:32:33",
+      finished_at: "2026-08-31 10:33:06",
+      rest_seconds_before: 0,
+      repetition_count: 15,
+      added_weight: 0,
+      added_weight_unit: 1,
+      set_in_exercise: 1,
+      workout_exercise_id: 10957
+    }]
+  });
+});
+
+test("deleteWorkoutLog issues a DELETE to the log endpoint", async () => {
+  const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => { requests.push({ url, init }); return jsonResponse(null); }
+  });
+
+  await api.deleteWorkoutLog(621939);
+  assert.match(requests[0]?.url ?? "", /\/workouts\/log\/621939$/);
+  assert.equal(requests[0]?.init?.method, "DELETE");
+});
+
 test("cloneWorkout converts the read shape into the write payload", async () => {
   const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
   const responses = [

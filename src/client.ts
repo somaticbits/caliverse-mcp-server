@@ -1,5 +1,5 @@
 import { toFormBody } from "./serializer.js";
-import { toApiWorkoutPayload, workoutInputSchema, type WorkoutInput } from "./types.js";
+import { mapWorkoutLogToApiPayload, toApiWorkoutPayload, workoutInputSchema, type WorkoutInput, type WorkoutLogInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
@@ -97,11 +97,77 @@ export class CaliverseApi {
     return this.request(`/workouts/${workoutId}`, { method: "DELETE" });
   }
 
+  public listMuscleGroups(): Promise<unknown> {
+    return this.request("/muscle-groups", { method: "GET" });
+  }
+
+  public getProgressSignals(): Promise<unknown> {
+    return this.request("/ai-coach/today/progress-signals", { method: "GET" });
+  }
+
+  public getMyDay(date: string): Promise<unknown> {
+    return this.request(`/users/me/my-day?date=${encodeURIComponent(date)}`, { method: "GET" });
+  }
+
+  public getScheduleCalendar(dateFrom: string, dateTo: string): Promise<unknown> {
+    return this.request(`/workouts/schedules/calendar?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`, { method: "GET" });
+  }
+
+  public getCoachProfile(): Promise<unknown> {
+    return this.request("/ai-coach/profile", { method: "GET" });
+  }
+
+  public getCoachToday(): Promise<unknown> {
+    return this.request("/ai-coach/today", { method: "GET" });
+  }
+
+  public getCoachHistory(from: string, to: string): Promise<unknown> {
+    return this.request(`/ai-coach/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { method: "GET" });
+  }
+
+  public getActivePlan(): Promise<unknown> {
+    return this.request("/workouts/plans/mine/active", { method: "GET" });
+  }
+
+  public getProgressionTree(exerciseId: number): Promise<unknown> {
+    return this.request(`/exercises/${exerciseId}/progression-tree`, { method: "GET" });
+  }
+
+  public getMyWorkoutRating(workoutId: number): Promise<unknown> {
+    return this.request(`/workouts/${workoutId}/rating`, { method: "GET" });
+  }
+
+  public listFavoriteWorkouts(): Promise<unknown> {
+    return this.request("/workouts/favorite", { method: "GET" });
+  }
+
+  public getLogFeedbackOptions(): Promise<unknown> {
+    return this.request("/workouts/log/feedback/options", { method: "GET" });
+  }
+
+  public async logWorkoutCompletion(input: WorkoutLogInput): Promise<unknown> {
+    const workout = await this.getWorkout(input.workoutId);
+    const payload = mapWorkoutLogToApiPayload(workout, input);
+    return this.postJson("/workouts/log/finish-with-exercises", payload);
+  }
+
+  public deleteWorkoutLog(logId: number): Promise<unknown> {
+    return this.request(`/workouts/log/${logId}`, { method: "DELETE" });
+  }
+
   private async sendWorkout(endpoint: string, payload: object): Promise<unknown> {
     return this.request(endpoint, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: toFormBody(payload)
+    });
+  }
+
+  private async postJson(endpoint: string, payload: object): Promise<unknown> {
+    return this.request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
     });
   }
 
