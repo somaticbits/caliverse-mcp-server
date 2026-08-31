@@ -125,6 +125,14 @@ export class CaliverseApi {
     });
   }
 
+  public getWorkoutFilters(): Promise<unknown> {
+    return this.request("/workouts/filters", { method: "GET" });
+  }
+
+  public getSubscription(): Promise<unknown> {
+    return this.request("/users/subscriptions/verify", { method: "GET" });
+  }
+
   public async getExercisePrs(from: string, to: string): Promise<ExercisePrCollection & { from: string; to: string; daysScanned: number }> {
     const dates = this.dateRange(from, to);
     if (dates.length > MAX_PR_SCAN_DAYS) {

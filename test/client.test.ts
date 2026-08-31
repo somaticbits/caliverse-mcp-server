@@ -124,6 +124,8 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
   await api.listMuscleGroups();
   await api.getProgressSignals();
   await api.getMyDay("2026-08-31");
+  await api.getWorkoutFilters();
+  await api.getSubscription();
   await api.getScheduleCalendar("2026-08-01", "2026-08-31");
   await api.getCoachProfile();
   await api.getCoachToday();
@@ -138,6 +140,8 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
     "https://www.caliverse.app/api/v1/muscle-groups",
     "https://www.caliverse.app/api/v1/ai-coach/today/progress-signals",
     "https://www.caliverse.app/api/v1/users/me/my-day?date=2026-08-31",
+    "https://www.caliverse.app/api/v1/workouts/filters",
+    "https://www.caliverse.app/api/v1/users/subscriptions/verify",
     "https://www.caliverse.app/api/v1/workouts/schedules/calendar?date_from=2026-08-01&date_to=2026-08-31",
     "https://www.caliverse.app/api/v1/ai-coach/profile",
     "https://www.caliverse.app/api/v1/ai-coach/today",

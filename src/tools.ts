@@ -191,6 +191,24 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try { return textResult(await api.getAvailableEquipment()); } catch (error) { return errorResult(error); }
   });
 
+  server.registerTool("caliverse_get_workout_filters", {
+    title: "Get Caliverse Workout Filters",
+    description: "Get Caliverse's canonical workout level values and muscle-group filter IDs.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getWorkoutFilters()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_subscription", {
+    title: "Get Caliverse Subscription",
+    description: "Get your Caliverse subscription type, status, and expiry.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getSubscription()); } catch (error) { return errorResult(error); }
+  });
+
   server.registerTool("caliverse_get_my_day", {
     title: "Get Caliverse Day Schedule",
     description: "Get one day's scheduled, missed, attended, and finished workouts. date defaults to today (YYYY-MM-DD).",
