@@ -82,11 +82,11 @@ Use a normal absolute path, not `pnpm exec`, `npx`, a shell wrapper, or a remote
 ## Tool workflow
 
 1. Call `caliverse_list_my_workouts` to inspect accepted `level` values in your account.
-2. Call `caliverse_list_exercises` (with `query` when possible) to get real exercise IDs.
+2. Call `caliverse_list_exercises` (with `query` when possible) to get real exercise IDs. Collection tools return `nextOffset`; pass it as `offset` until it is `null`.
 3. Call `caliverse_create_workout` with valid exercise IDs and `confirm: true`.
-4. Read the created workout back before making a replacement update.
+4. Read the created workout back with `detail: "structure"` before making a replacement update.
 
-`caliverse_update_workout` replaces the complete workout definition. Always read a workout first and preserve every field you intend to keep. `caliverse_delete_workout` is irreversible.
+`caliverse_update_workout` replaces the complete workout definition. Always read a workout first and preserve every field you intend to keep. `caliverse_delete_workout` is irreversible. Read tools default to compact summaries; use `detail: "full"` for the unmodified API object, or `fields` to select explicit top-level fields.
 
 ## Testing
 
@@ -122,8 +122,8 @@ The mutation smoke test creates a short, timestamped workout and deletes it in `
 
 - Firebase ID tokens remain in memory and refresh automatically. When Firebase rotates a file-backed refresh token, the replacement is atomically persisted with owner-only permissions. The persisted refresh token can be invalidated by changing your Caliverse password or revoking access.
 - All production endpoints are fixed HTTPS URLs in source. The server never accepts an arbitrary URL from an MCP tool input.
-- API error responses are capped at 1,000 characters, and credentials are never included in errors or logs.
-- Request timeouts are 15 seconds for Firebase and 20 seconds for Caliverse.
+- API error responses are capped at 1,000 characters. MCP tool responses default to 65,536 UTF-8 bytes (configurable with `CALIVERSE_MAX_RESULT_BYTES`), and credentials are never included in errors or logs.
+- Request timeouts are 15 seconds for Firebase, 20 seconds for standard Caliverse calls, and 45 seconds for the large plan catalog.
 - A 401 causes exactly one refresh-and-retry; loops are impossible.
 - Mutating MCP tools require a literal `confirm: true`; this prevents accidental agent writes from incomplete calls.
 - `pnpm-lock.yaml` integrity hashes and `pnpm install --frozen-lockfile --ignore-scripts` provide repeatable installs without lifecycle-script execution.

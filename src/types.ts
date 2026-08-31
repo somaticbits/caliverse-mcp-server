@@ -25,7 +25,7 @@ export const workoutInputSchema = z.object({
   privateTitle: z.string().trim().max(200).optional(),
   isPublic: z.boolean().default(false),
   isPro: z.boolean().default(false),
-  lengthInMinutes: z.number().int().positive().max(720),
+  lengthInMinutes: z.coerce.number().int().positive().max(720),
   // The server's permitted values are discovered from the user's existing workouts.
   level: z.string().trim().min(1).max(100),
   warmupWorkoutId: z.number().int().positive().nullable().optional(),

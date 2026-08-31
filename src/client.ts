@@ -5,7 +5,8 @@ import type { FetchLike } from "./auth.js";
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
 const MAX_ERROR_BODY_LENGTH = 1_000;
 const DEFAULT_TIMEOUT_MS = 20_000;
-const PLAN_TIMEOUT_MS = 60_000;
+const PLAN_TIMEOUT_MS = 45_000;
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 export class CaliverseApiError extends Error {
   public constructor(
@@ -61,6 +62,10 @@ export class CaliverseApi {
 
   public listPlans(): Promise<unknown> {
     return this.request("/workouts/plans", { method: "GET" }, false, PLAN_TIMEOUT_MS);
+  }
+
+  public listPlansShort(): Promise<unknown> {
+    return this.request("/workouts/plans/short?include_mine=1", { method: "GET" });
   }
 
   public getPlan(planId: number): Promise<unknown> {
@@ -190,7 +195,14 @@ export class CaliverseApi {
       return this.request(endpoint, init, true, timeoutMs);
     }
 
+    const contentLength = response.headers.get("content-length");
+    if (contentLength !== null && Number(contentLength) > MAX_RESPONSE_BYTES) {
+      throw new CaliverseApiError(response.status, endpoint, `Caliverse API response from ${endpoint} exceeds the ${MAX_RESPONSE_BYTES}-byte safety limit.`);
+    }
     const text = await response.text();
+    if (Buffer.byteLength(text, "utf8") > MAX_RESPONSE_BYTES) {
+      throw new CaliverseApiError(response.status, endpoint, `Caliverse API response from ${endpoint} exceeds the ${MAX_RESPONSE_BYTES}-byte safety limit.`);
+    }
     if (!response.ok) {
       throw new CaliverseApiError(
         response.status,
