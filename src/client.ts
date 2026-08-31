@@ -113,10 +113,44 @@ export class CaliverseApi {
 
   public async getAvailableEquipment(): Promise<Array<{ id: number; title: string }>> {
     const account = await this.request("/users/me", { method: "GET" });
-    if (typeof account !== "object" || account === null || !Array.isArray((account as { available_equipments?: unknown }).available_equipments)) {
+    if (typeof account !== "object" || account === null) {
       throw new Error("Caliverse returned an invalid account equipment list.");
     }
-    return (account as { available_equipments: unknown[] }).available_equipments.flatMap((equipment) => {
+    return this.projectEquipmentList((account as { available_equipments?: unknown }).available_equipments, "account equipment list");
+  }
+
+  public async listEquipmentCatalog(): Promise<Array<{ id: number; title: string }>> {
+    return this.projectEquipmentList(await this.request("/sport/equipments", { method: "GET" }), "equipment catalog");
+  }
+
+  public async setAvailableEquipment(equipmentIds: number[]): Promise<Array<{ id: number; title: string }>> {
+    if (equipmentIds.length === 0) {
+      throw new Error("Available equipment cannot be empty.");
+    }
+    if (equipmentIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+      throw new Error("Equipment IDs must be positive integers.");
+    }
+    if (new Set(equipmentIds).size !== equipmentIds.length) {
+      throw new Error("Equipment IDs must not contain duplicates.");
+    }
+    const catalog = await this.listEquipmentCatalog();
+    const validIds = new Set(catalog.map((equipment) => equipment.id));
+    const unknownIds = equipmentIds.filter((id) => !validIds.has(id));
+    if (unknownIds.length > 0) {
+      throw new Error(`Unknown equipment ID(s): ${unknownIds.join(", ")}. Valid IDs: ${catalog.map((equipment) => equipment.id).join(", ")}.`);
+    }
+    const account = await this.postJson("/users/me/available-equipments", { available_equipments: equipmentIds });
+    if (typeof account !== "object" || account === null) {
+      throw new Error("Caliverse returned an invalid account equipment list.");
+    }
+    return this.projectEquipmentList((account as { available_equipments?: unknown }).available_equipments, "account equipment list");
+  }
+
+  private projectEquipmentList(value: unknown, context: string): Array<{ id: number; title: string }> {
+    if (!Array.isArray(value)) {
+      throw new Error(`Caliverse returned an invalid ${context}.`);
+    }
+    return value.flatMap((equipment) => {
       if (typeof equipment !== "object" || equipment === null) {
         return [];
       }

@@ -118,12 +118,16 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
   const requests: string[] = [];
   const api = new CaliverseApi({
     tokenManager: { async getIdToken() { return "token"; } },
-    fetchImpl: async (url) => { requests.push(url); return jsonResponse({}); }
+    fetchImpl: async (url) => {
+      requests.push(url);
+      return jsonResponse(url.endsWith("/sport/equipments") ? [{ id: 1, title: "Pull-Up Bar" }] : {});
+    }
   });
 
   await api.listMuscleGroups();
   await api.getProgressSignals();
   await api.getMyDay("2026-08-31");
+  await api.listEquipmentCatalog();
   await api.getWorkoutFilters();
   await api.getSubscription();
   await api.getScheduleCalendar("2026-08-01", "2026-08-31");
@@ -140,6 +144,7 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
     "https://www.caliverse.app/api/v1/muscle-groups",
     "https://www.caliverse.app/api/v1/ai-coach/today/progress-signals",
     "https://www.caliverse.app/api/v1/users/me/my-day?date=2026-08-31",
+    "https://www.caliverse.app/api/v1/sport/equipments",
     "https://www.caliverse.app/api/v1/workouts/filters",
     "https://www.caliverse.app/api/v1/users/subscriptions/verify",
     "https://www.caliverse.app/api/v1/workouts/schedules/calendar?date_from=2026-08-01&date_to=2026-08-31",
@@ -236,6 +241,46 @@ test("getAvailableEquipment rejects an account response without an equipment lis
   });
 
   await assert.rejects(api.getAvailableEquipment(), /invalid account equipment list/);
+});
+
+test("setAvailableEquipment validates against the catalog, sends JSON, and projects the account response", async () => {
+  const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      if (requests.length === 1) {
+        return jsonResponse([{ id: 1, title: "Pull-Up Bar" }, { id: 2, title: "Rings" }]);
+      }
+      return jsonResponse({
+        email: "person@example.com",
+        push_notification_id: "private-token",
+        available_equipments: [{ id: 1, title: "Pull-Up Bar" }, { id: 2, title: "Rings" }]
+      });
+    }
+  });
+
+  assert.deepEqual(await api.setAvailableEquipment([1, 2]), [{ id: 1, title: "Pull-Up Bar" }, { id: 2, title: "Rings" }]);
+  assert.deepEqual(requests.map((request) => request.url), [
+    "https://www.caliverse.app/api/v1/sport/equipments",
+    "https://www.caliverse.app/api/v1/users/me/available-equipments"
+  ]);
+  assert.equal(requests[1]?.init?.method, "POST");
+  assert.equal(new Headers(requests[1]?.init?.headers).get("content-type"), "application/json");
+  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), { available_equipments: [1, 2] });
+});
+
+test("setAvailableEquipment rejects empty, duplicate, and unknown IDs without writing", async () => {
+  let requests = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => { requests += 1; return jsonResponse([{ id: 1, title: "Pull-Up Bar" }]); }
+  });
+
+  await assert.rejects(api.setAvailableEquipment([]), /cannot be empty/);
+  await assert.rejects(api.setAvailableEquipment([1, 1]), /must not contain duplicates/);
+  await assert.rejects(api.setAvailableEquipment([2]), /Unknown equipment ID/);
+  assert.equal(requests, 1);
 });
 
 test("logWorkoutCompletion fetches the workout, maps it, and POSTs JSON", async () => {
