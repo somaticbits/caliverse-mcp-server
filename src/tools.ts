@@ -12,6 +12,12 @@ const workoutDetailSchema = z.enum(["summary", "structure", "full"]);
 const planDetailSchema = z.enum(["summary", "full"]);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format.");
 
+function dateDaysAgo(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return todayDateString(() => date);
+}
+
 function errorResult(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown Caliverse MCP error.";
   return { content: [{ type: "text" as const, text: message }], isError: true };
@@ -165,6 +171,15 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     annotations: readAnnotations
   }, async () => {
     try { return textResult(await api.getProgressSignals()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_exercise_prs", {
+    title: "Get Caliverse Exercise PRs",
+    description: "Aggregate exercise PRs from completed daily logs. Scans one read-only API request per day; defaults to the last 90 days and accepts at most 120 days per request. Repetition count/time and kilograms are reported separately.",
+    inputSchema: { from: dateSchema.optional(), to: dateSchema.default(() => todayDateString()) },
+    annotations: readAnnotations
+  }, async ({ from, to }) => {
+    try { return textResult(await api.getExercisePrs(from ?? dateDaysAgo(89), to)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_get_my_day", {

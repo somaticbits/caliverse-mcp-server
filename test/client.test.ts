@@ -150,6 +150,66 @@ test("read-only progress and coaching methods call the expected endpoints", asyn
   ]);
 });
 
+test("getExercisePrs scans an inclusive range and returns only the aggregate", async () => {
+  const requests: string[] = [];
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url) => {
+      requests.push(url);
+      const date = new URL(url).searchParams.get("date");
+      return jsonResponse({
+        finishedWorkoutLogs: [{
+          workout_exercise_logs: [{
+            repetition_count: date === "2026-08-31" ? 12 : 8,
+            added_weight: 0,
+            added_weight_unit: 1,
+            finished_at: `${date}T10:00:00Z`,
+            workout_exercise: { repetition_type: "count", exercise: { id: 50, title: "Jump Squat" } }
+          }]
+        }]
+      });
+    }
+  });
+
+  const result = await api.getExercisePrs("2026-08-30", "2026-08-31");
+
+  assert.deepEqual(requests.sort(), [
+    "https://www.caliverse.app/api/v1/users/me/my-day?date=2026-08-30",
+    "https://www.caliverse.app/api/v1/users/me/my-day?date=2026-08-31"
+  ]);
+  assert.deepEqual(result, {
+    from: "2026-08-30",
+    to: "2026-08-31",
+    daysScanned: 2,
+    exercises: [{
+      exerciseId: 50,
+      title: "Jump Squat",
+      repetitionType: "count",
+      maxReps: 12,
+      maxRepsAt: "2026-08-31T10:00:00Z",
+      maxAddedWeightKg: 0,
+      maxWeightAt: "2026-08-30T10:00:00Z",
+      lastPerformedAt: "2026-08-31T10:00:00Z",
+      sessionCount: 2,
+      setCount: 2
+    }],
+    warnings: { skippedMissingExerciseReference: 0, skippedNonKgWeightLogs: 0 }
+  });
+});
+
+test("getExercisePrs rejects invalid, reversed, and oversized ranges before fetching", async () => {
+  let requests = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => { requests += 1; return jsonResponse({}); }
+  });
+
+  await assert.rejects(api.getExercisePrs("2026-02-30", "2026-03-01"), /not a valid/);
+  await assert.rejects(api.getExercisePrs("2026-09-01", "2026-08-31"), /start date/);
+  await assert.rejects(api.getExercisePrs("2026-01-01", "2026-05-01"), /limited to 120 days/);
+  assert.equal(requests, 0);
+});
+
 test("logWorkoutCompletion fetches the workout, maps it, and POSTs JSON", async () => {
   const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
   const api = new CaliverseApi({

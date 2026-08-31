@@ -1,5 +1,5 @@
 import { toFormBody } from "./serializer.js";
-import { mapWorkoutLogToApiPayload, toApiWorkoutPayload, workoutInputSchema, type WorkoutInput, type WorkoutLogInput } from "./types.js";
+import { collectExercisePrs, mapWorkoutLogToApiPayload, toApiWorkoutPayload, workoutInputSchema, type ExercisePrCollection, type WorkoutInput, type WorkoutLogInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
 const API_BASE_URL = "https://www.caliverse.app/api/v1";
@@ -7,6 +7,8 @@ const MAX_ERROR_BODY_LENGTH = 1_000;
 const DEFAULT_TIMEOUT_MS = 20_000;
 const PLAN_TIMEOUT_MS = 45_000;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const MAX_PR_SCAN_DAYS = 120;
+const PR_SCAN_CONCURRENCY = 5;
 
 export class CaliverseApiError extends Error {
   public constructor(
@@ -107,6 +109,23 @@ export class CaliverseApi {
 
   public getMyDay(date: string): Promise<unknown> {
     return this.request(`/users/me/my-day?date=${encodeURIComponent(date)}`, { method: "GET" });
+  }
+
+  public async getExercisePrs(from: string, to: string): Promise<ExercisePrCollection & { from: string; to: string; daysScanned: number }> {
+    const dates = this.dateRange(from, to);
+    if (dates.length > MAX_PR_SCAN_DAYS) {
+      throw new Error(`Exercise PR scans are limited to ${MAX_PR_SCAN_DAYS} days per request. Split ${from} through ${to} into smaller ranges.`);
+    }
+    const days: unknown[] = new Array(dates.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (nextIndex < dates.length) {
+        const index = nextIndex++;
+        days[index] = await this.getMyDay(dates[index]!);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PR_SCAN_CONCURRENCY, dates.length) }, worker));
+    return { ...collectExercisePrs(days), from, to, daysScanned: dates.length };
   }
 
   public getScheduleCalendar(dateFrom: string, dateTo: string): Promise<unknown> {
@@ -243,6 +262,26 @@ export class CaliverseApi {
       return Number.isInteger(id) && id > 0 ? id : undefined;
     }
     return undefined;
+  }
+
+  private dateRange(from: string, to: string): string[] {
+    const parse = (value: string): Date => {
+      const date = new Date(`${value}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+        throw new Error(`"${value}" is not a valid YYYY-MM-DD date.`);
+      }
+      return date;
+    };
+    const start = parse(from);
+    const end = parse(to);
+    if (start > end) {
+      throw new Error("Exercise PR scan start date must be on or before the end date.");
+    }
+    const dates: string[] = [];
+    for (const current = new Date(start); current <= end; current.setUTCDate(current.getUTCDate() + 1)) {
+      dates.push(current.toISOString().slice(0, 10));
+    }
+    return dates;
   }
 
   private async request(endpoint: string, init: RequestInit, retried = false, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {

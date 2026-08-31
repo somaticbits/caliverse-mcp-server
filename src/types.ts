@@ -100,6 +100,124 @@ export function todayDateString(now: () => Date = () => new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+export interface ExercisePr {
+  exerciseId: number;
+  title: string;
+  repetitionType: "count" | "time";
+  maxReps: number;
+  maxRepsAt: string | null;
+  maxAddedWeightKg: number | null;
+  maxWeightAt: string | null;
+  lastPerformedAt: string | null;
+  sessionCount: number;
+  setCount: number;
+}
+
+export interface ExercisePrCollection {
+  exercises: ExercisePr[];
+  warnings: {
+    skippedMissingExerciseReference: number;
+    skippedNonKgWeightLogs: number;
+  };
+}
+
+function prRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function prNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function prTimestamp(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Folds the completed exercise logs returned by one or more `/users/me/my-day` responses into
+ * one historical PR row per exercise and repetition type. Caliverse only captured kilogram unit
+ * code 1, so logs using an unknown unit never contribute to the weight maximum.
+ */
+export function collectExercisePrs(days: unknown[]): ExercisePrCollection {
+  const exercises = new Map<string, ExercisePr>();
+  const warnings = { skippedMissingExerciseReference: 0, skippedNonKgWeightLogs: 0 };
+
+  for (const day of days) {
+    const finishedWorkoutLogs = prRecord(day)?.finishedWorkoutLogs;
+    if (!Array.isArray(finishedWorkoutLogs)) {
+      continue;
+    }
+    for (const workoutLog of finishedWorkoutLogs) {
+      const logs = prRecord(workoutLog)?.workout_exercise_logs;
+      if (!Array.isArray(logs)) {
+        continue;
+      }
+      const exercisesInSession = new Set<string>();
+      for (const loggedSet of logs) {
+        const item = prRecord(loggedSet);
+        const workoutExercise = prRecord(item?.workout_exercise);
+        const exercise = prRecord(workoutExercise?.exercise);
+        const exerciseId = prNumber(exercise?.id);
+        const title = typeof exercise?.title === "string" ? exercise.title : undefined;
+        const repetitionType = workoutExercise?.repetition_type;
+        const repetitionCount = prNumber(item?.repetition_count);
+        if (exerciseId === undefined || title === undefined || (repetitionType !== "count" && repetitionType !== "time") || repetitionCount === undefined) {
+          warnings.skippedMissingExerciseReference += 1;
+          continue;
+        }
+
+        const key = `${exerciseId}:${repetitionType}`;
+        const performedAt = prTimestamp(item?.finished_at) ?? prTimestamp(item?.started_at) ?? prTimestamp(prRecord(workoutLog)?.finished_at);
+        let aggregate = exercises.get(key);
+        if (aggregate === undefined) {
+          aggregate = {
+            exerciseId,
+            title,
+            repetitionType,
+            maxReps: repetitionCount,
+            maxRepsAt: performedAt,
+            maxAddedWeightKg: null,
+            maxWeightAt: null,
+            lastPerformedAt: performedAt,
+            sessionCount: 0,
+            setCount: 0
+          };
+          exercises.set(key, aggregate);
+        }
+        if (!exercisesInSession.has(key)) {
+          aggregate.sessionCount += 1;
+          exercisesInSession.add(key);
+        }
+        aggregate.setCount += 1;
+        if (repetitionCount > aggregate.maxReps) {
+          aggregate.maxReps = repetitionCount;
+          aggregate.maxRepsAt = performedAt;
+        }
+        if (performedAt !== null && (aggregate.lastPerformedAt === null || performedAt > aggregate.lastPerformedAt)) {
+          aggregate.lastPerformedAt = performedAt;
+        }
+
+        const addedWeight = prNumber(item?.added_weight);
+        if (addedWeight !== undefined) {
+          if (item?.added_weight_unit !== 1) {
+            warnings.skippedNonKgWeightLogs += 1;
+          } else if (aggregate.maxAddedWeightKg === null || addedWeight > aggregate.maxAddedWeightKg) {
+            aggregate.maxAddedWeightKg = addedWeight;
+            aggregate.maxWeightAt = performedAt;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    exercises: [...exercises.values()].sort((left, right) => left.title.localeCompare(right.title) || left.exerciseId - right.exerciseId || left.repetitionType.localeCompare(right.repetitionType)),
+    warnings
+  };
+}
+
 export const workoutLogSetSchema = z.object({
   repetitionCount: z.number().int().nonnegative(),
   addedWeightKg: z.number().nonnegative().default(0),

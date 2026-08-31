@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapWorkoutLogToApiPayload, toCaliverseDateTime, todayDateString, workoutLogInputSchema } from "../src/types.js";
+import { collectExercisePrs, mapWorkoutLogToApiPayload, toCaliverseDateTime, todayDateString, workoutLogInputSchema } from "../src/types.js";
 
 function sampleWorkout(): unknown {
   return {
@@ -48,6 +48,53 @@ test("todayDateString formats an injected clock as YYYY-MM-DD", () => {
 
 test("todayDateString defaults to the current date", () => {
   assert.match(todayDateString(), /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("collectExercisePrs aggregates completed sessions without mixing repetition types or weight units", () => {
+  const result = collectExercisePrs([{
+    finishedWorkoutLogs: [{
+      finished_at: "2026-08-30T10:00:00Z",
+      workout_exercise_logs: [
+        { repetition_count: 8, added_weight: 10, added_weight_unit: 1, finished_at: "2026-08-30T09:55:00Z", workout_exercise: { repetition_type: "count", exercise: { id: 50, title: "Jump Squat" } } },
+        { repetition_count: 12, added_weight: 5, added_weight_unit: 1, finished_at: "2026-08-30T09:58:00Z", workout_exercise: { repetition_type: "count", exercise: { id: 50, title: "Jump Squat" } } },
+        { repetition_count: 30, added_weight: 0, added_weight_unit: 1, finished_at: "2026-08-30T09:59:00Z", workout_exercise: { repetition_type: "time", exercise: { id: 50, title: "Jump Squat" } } },
+        { repetition_count: 4, added_weight: 20, added_weight_unit: 2, finished_at: "2026-08-30T09:59:30Z", workout_exercise: { repetition_type: "count", exercise: { id: 50, title: "Jump Squat" } } },
+        { repetition_count: 10, workout_exercise: { repetition_type: "count", exercise: null } }
+      ]
+    }]
+  }, {
+    finishedWorkoutLogs: [{
+      workout_exercise_logs: [{ repetition_count: 15, added_weight: 15, added_weight_unit: 1, finished_at: "2026-08-31T10:00:00Z", workout_exercise: { repetition_type: "count", exercise: { id: 50, title: "Jump Squat" } } }]
+    }]
+  }]);
+
+  assert.deepEqual(result.exercises, [
+    {
+      exerciseId: 50,
+      title: "Jump Squat",
+      repetitionType: "count",
+      maxReps: 15,
+      maxRepsAt: "2026-08-31T10:00:00Z",
+      maxAddedWeightKg: 15,
+      maxWeightAt: "2026-08-31T10:00:00Z",
+      lastPerformedAt: "2026-08-31T10:00:00Z",
+      sessionCount: 2,
+      setCount: 4
+    },
+    {
+      exerciseId: 50,
+      title: "Jump Squat",
+      repetitionType: "time",
+      maxReps: 30,
+      maxRepsAt: "2026-08-30T09:59:00Z",
+      maxAddedWeightKg: 0,
+      maxWeightAt: "2026-08-30T09:59:00Z",
+      lastPerformedAt: "2026-08-30T09:59:00Z",
+      sessionCount: 1,
+      setCount: 1
+    }
+  ]);
+  assert.deepEqual(result.warnings, { skippedMissingExerciseReference: 1, skippedNonKgWeightLogs: 1 });
 });
 
 test("mapWorkoutLogToApiPayload resolves exercise IDs to workout_exercise_id slots in order", () => {
