@@ -191,6 +191,24 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try { return textResult(await api.getAvailableEquipment()); } catch (error) { return errorResult(error); }
   });
 
+  server.registerTool("caliverse_list_equipment_catalog", {
+    title: "List Caliverse Equipment Catalog",
+    description: "List all Caliverse equipment IDs and titles. Use these IDs with caliverse_set_available_equipment.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.listEquipmentCatalog()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_set_available_equipment", {
+    title: "Set Available Caliverse Equipment",
+    description: "Replace your complete available-equipment list. This affects future Smart Coach workouts. Requires confirm: true.",
+    inputSchema: { equipmentIds: z.array(z.number().int().positive()).min(1).max(100), confirm: z.literal(true) },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+  }, async ({ equipmentIds }) => {
+    try { return textResult(await api.setAvailableEquipment(equipmentIds)); } catch (error) { return errorResult(error); }
+  });
+
   server.registerTool("caliverse_get_workout_filters", {
     title: "Get Caliverse Workout Filters",
     description: "Get Caliverse's canonical workout level values and muscle-group filter IDs.",
