@@ -210,6 +210,30 @@ test("getExercisePrs rejects invalid, reversed, and oversized ranges before fetc
   assert.equal(requests, 0);
 });
 
+test("getAvailableEquipment projects only valid equipment from the account response", async () => {
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => jsonResponse({
+      id: 123,
+      email: "person@example.com",
+      first_name: "Person",
+      push_notification_id: "private-token",
+      available_equipments: [{ id: 1, title: "Pull-Up Bar" }, { id: "2", title: "Rings" }, null]
+    })
+  });
+
+  assert.deepEqual(await api.getAvailableEquipment(), [{ id: 1, title: "Pull-Up Bar" }]);
+});
+
+test("getAvailableEquipment rejects an account response without an equipment list", async () => {
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => jsonResponse({ id: 123 })
+  });
+
+  await assert.rejects(api.getAvailableEquipment(), /invalid account equipment list/);
+});
+
 test("logWorkoutCompletion fetches the workout, maps it, and POSTs JSON", async () => {
   const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
   const api = new CaliverseApi({

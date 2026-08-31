@@ -111,6 +111,20 @@ export class CaliverseApi {
     return this.request(`/users/me/my-day?date=${encodeURIComponent(date)}`, { method: "GET" });
   }
 
+  public async getAvailableEquipment(): Promise<Array<{ id: number; title: string }>> {
+    const account = await this.request("/users/me", { method: "GET" });
+    if (typeof account !== "object" || account === null || !Array.isArray((account as { available_equipments?: unknown }).available_equipments)) {
+      throw new Error("Caliverse returned an invalid account equipment list.");
+    }
+    return (account as { available_equipments: unknown[] }).available_equipments.flatMap((equipment) => {
+      if (typeof equipment !== "object" || equipment === null) {
+        return [];
+      }
+      const { id, title } = equipment as { id?: unknown; title?: unknown };
+      return typeof id === "number" && Number.isInteger(id) && id > 0 && typeof title === "string" ? [{ id, title }] : [];
+    });
+  }
+
   public async getExercisePrs(from: string, to: string): Promise<ExercisePrCollection & { from: string; to: string; daysScanned: number }> {
     const dates = this.dateRange(from, to);
     if (dates.length > MAX_PR_SCAN_DAYS) {

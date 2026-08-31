@@ -182,6 +182,15 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try { return textResult(await api.getExercisePrs(from ?? dateDaysAgo(89), to)); } catch (error) { return errorResult(error); }
   });
 
+  server.registerTool("caliverse_get_available_equipment", {
+    title: "Get Available Caliverse Equipment",
+    description: "Get only equipment available to you. An exercise is suitable when every required_equipments[].id from caliverse_list_exercises appears in this list.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getAvailableEquipment()); } catch (error) { return errorResult(error); }
+  });
+
   server.registerTool("caliverse_get_my_day", {
     title: "Get Caliverse Day Schedule",
     description: "Get one day's scheduled, missed, attended, and finished workouts. date defaults to today (YYYY-MM-DD).",
