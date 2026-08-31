@@ -23,6 +23,10 @@ export function isLoopbackAddress(address: string | undefined): boolean {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
+export function isValidLoopbackHost(host: string | undefined, port: number): boolean {
+  return host === `127.0.0.1:${port}` || host === `localhost:${port}`;
+}
+
 export function loginPage(nonce: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -272,6 +276,7 @@ export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promis
 
   return new Promise((resolveLogin, rejectLogin) => {
     let completed = false;
+    let boundPort: number | undefined;
     const finish = (error?: Error): void => {
       if (completed) return;
       completed = true;
@@ -299,6 +304,10 @@ export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promis
         return;
       }
       if (request.method === "POST" && path === "/token") {
+        if (boundPort === undefined || !isValidLoopbackHost(request.headers.host, boundPort)) {
+          response.writeHead(400).end("Invalid Host header.");
+          return;
+        }
         void readJsonBody(request).then(async (body) => {
           if (
             typeof body !== "object" || body === null ||
@@ -323,13 +332,14 @@ export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promis
     });
     const timeout = setTimeout(() => finish(new Error("Google login timed out after five minutes.")), timeoutMs);
     server.once("error", (error) => finish(error));
-    server.listen(0, "localhost", () => {
+    server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       if (address === null || typeof address === "string") {
         finish(new Error("Could not determine the local Google login URL."));
         return;
       }
-      const url = `http://localhost:${address.port}/`;
+      boundPort = address.port;
+      const url = `http://127.0.0.1:${boundPort}/`;
       options.onUrl?.(url);
       process.stderr.write(`Opening secure local Google login at ${url}\n`);
       openBrowser(url);

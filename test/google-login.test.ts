@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isLoopbackAddress, loginPage, loginScript, loginStyles, startGoogleLogin } from "../scripts/google-login.js";
+import { isLoopbackAddress, isValidLoopbackHost, loginPage, loginScript, loginStyles, startGoogleLogin } from "../scripts/google-login.js";
 
 test("Google login page pins Firebase browser scripts with SRI", () => {
   const page = loginPage("nonce-value");
@@ -25,6 +25,14 @@ test("loopback filter accepts only local addresses", () => {
   assert.equal(isLoopbackAddress(undefined), false);
 });
 
+test("loopback Host filter accepts only the bound local port", () => {
+  assert.equal(isValidLoopbackHost("127.0.0.1:8080", 8080), true);
+  assert.equal(isValidLoopbackHost("localhost:8080", 8080), true);
+  assert.equal(isValidLoopbackHost("127.0.0.1:8081", 8080), false);
+  assert.equal(isValidLoopbackHost("evil.example:8080", 8080), false);
+  assert.equal(isValidLoopbackHost(undefined, 8080), false);
+});
+
 test("Google callback accepts a nonce-bound refresh token over loopback", async () => {
   let localUrl = "";
   let savedToken = "";
@@ -38,6 +46,7 @@ test("Google callback accepts a nonce-bound refresh token over loopback", async 
   });
 
   localUrl = await urlReady;
+  assert.match(localUrl, /^http:\/\/127\.0\.0\.1:\d+\/$/);
   const pageResponse = await fetch(localUrl);
   const page = await pageResponse.text();
   const nonce = /name="caliverse-login-nonce" content="([^"]+)"/.exec(page)?.[1];
