@@ -19,6 +19,8 @@ The implementation was derived from Caliverse's public web dashboard behavior. I
 - pnpm 10.7.0, activated through Corepack
 - A Caliverse account with workout-creation access
 
+This repository includes `.nvmrc`; run `nvm use` before installing when using nvm.
+
 ## Secure installation
 
 Review `package.json` and `pnpm-lock.yaml` before installing. All direct dependency versions are exact and the lockfile is committed.
@@ -46,7 +48,7 @@ pnpm login
 unset CALIVERSE_EMAIL CALIVERSE_PASSWORD
 ```
 
-Alternatively, set `CALIVERSE_REFRESH_TOKEN` in the MCP client's environment instead of creating the local credential file. Never commit an `.env` file or this token.
+Alternatively, set `CALIVERSE_REFRESH_TOKEN` in the MCP client's environment instead of creating the local credential file. Prefer the local credential file: it is permission-checked at mode `0600`, whereas the environment variable bypasses that check. Never commit an `.env` file or this token.
 
 ### Google account login
 
@@ -118,7 +120,7 @@ The mutation smoke test creates a short, timestamped workout and deletes it in `
 
 ## Security model
 
-- Firebase ID tokens remain in memory and refresh automatically. The persisted refresh token is permission-restricted and can be invalidated by changing your Caliverse password or revoking access.
+- Firebase ID tokens remain in memory and refresh automatically. When Firebase rotates a file-backed refresh token, the replacement is atomically persisted with owner-only permissions. The persisted refresh token can be invalidated by changing your Caliverse password or revoking access.
 - All production endpoints are fixed HTTPS URLs in source. The server never accepts an arbitrary URL from an MCP tool input.
 - API error responses are capped at 1,000 characters, and credentials are never included in errors or logs.
 - Request timeouts are 15 seconds for Firebase and 20 seconds for Caliverse.

@@ -112,7 +112,8 @@ export class TokenManager {
   public constructor(
     private refreshToken: string,
     private readonly fetchImpl: FetchLike = fetch,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly onRefreshToken?: (refreshToken: string) => void | Promise<void>
   ) {}
 
   public async getIdToken(forceRefresh = false): Promise<string> {
@@ -120,8 +121,16 @@ export class TokenManager {
       return this.session.idToken;
     }
 
-    this.session = await refreshSession(this.refreshToken, this.fetchImpl, this.now);
+    const previousRefreshToken = this.refreshToken;
+    this.session = await refreshSession(previousRefreshToken, this.fetchImpl, this.now);
     this.refreshToken = this.session.refreshToken;
+    if (this.refreshToken !== previousRefreshToken && this.onRefreshToken !== undefined) {
+      try {
+        await this.onRefreshToken(this.refreshToken);
+      } catch {
+        // Token persistence must not interrupt an otherwise valid API request.
+      }
+    }
     return this.session.idToken;
   }
 

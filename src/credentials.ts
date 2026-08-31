@@ -9,6 +9,11 @@ interface StoredCredentials {
   refreshToken: string;
 }
 
+export interface LoadedRefreshToken {
+  refreshToken: string;
+  source: "environment" | "file";
+}
+
 export function credentialsPath(): string {
   return CREDENTIALS_FILE;
 }
@@ -34,10 +39,10 @@ export async function saveRefreshToken(refreshToken: string, file = CREDENTIALS_
   }
 }
 
-export async function loadRefreshToken(file = CREDENTIALS_FILE): Promise<string> {
+export async function loadRefreshTokenWithSource(file = CREDENTIALS_FILE): Promise<LoadedRefreshToken> {
   const environmentToken = process.env.CALIVERSE_REFRESH_TOKEN;
   if (environmentToken !== undefined && environmentToken.length > 0) {
-    return environmentToken;
+    return { refreshToken: environmentToken, source: "environment" };
   }
 
   let metadata;
@@ -70,5 +75,9 @@ export async function loadRefreshToken(file = CREDENTIALS_FILE): Promise<string>
   ) {
     throw new Error(`Credentials file ${file} does not contain a refresh token.`);
   }
-  return (credentials as StoredCredentials).refreshToken;
+  return { refreshToken: (credentials as StoredCredentials).refreshToken, source: "file" };
+}
+
+export async function loadRefreshToken(file = CREDENTIALS_FILE): Promise<string> {
+  return (await loadRefreshTokenWithSource(file)).refreshToken;
 }

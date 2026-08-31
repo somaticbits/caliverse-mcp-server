@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Keep exact-pinned npm dependencies current through reviewed CI-validated pull requests.",
+  "extends": ["config:base"],
+  "packageRules": [
+    {
+      "description": "Group routine npm updates into one weekly pull request.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "npm dependencies (minor/patch)",
+      "schedule": ["before 9am on Monday"]
+    },
+    {
+      "description": "Major npm updates require individual review.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "schedule": ["before 9am on Monday"]
+    }
+  ],
+  "labels": ["renovate"],
+  "prCreation": "immediate",
+  "rebaseWhen": "behind-base-branch",
+  "commitMessagePrefix": "chore(deps):"
+}

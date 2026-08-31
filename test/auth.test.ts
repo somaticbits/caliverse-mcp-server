@@ -49,3 +49,34 @@ test("TokenManager caches a valid token and refreshes before expiry", async () =
   assert.equal(manager.getRefreshToken(), "refresh-2");
   assert.equal(calls, 2);
 });
+
+test("TokenManager persists a rotated refresh token without disrupting requests", async () => {
+  const persisted: string[] = [];
+  const manager = new TokenManager(
+    "initial",
+    async () => jsonResponse({ id_token: "token", refresh_token: "rotated", expires_in: "120" }),
+    () => 0,
+    async (refreshToken) => {
+      persisted.push(refreshToken);
+      throw new Error("disk unavailable");
+    }
+  );
+
+  assert.equal(await manager.getIdToken(), "token");
+  assert.deepEqual(persisted, ["rotated"]);
+});
+
+test("TokenManager does not persist an unchanged refresh token", async () => {
+  let persisted = false;
+  const manager = new TokenManager(
+    "unchanged",
+    async () => jsonResponse({ id_token: "token", refresh_token: "unchanged", expires_in: "120" }),
+    () => 0,
+    () => {
+      persisted = true;
+    }
+  );
+
+  await manager.getIdToken();
+  assert.equal(persisted, false);
+});
