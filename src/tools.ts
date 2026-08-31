@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CaliverseApi } from "./client.js";
-import { omittedKeys, projectExercise, projectPlan, projectWorkout } from "./projection.js";
+import { omittedKeys, planSummary, projectExercise, projectPlan, projectWorkout } from "./projection.js";
 import { fieldsSchema, pageSchema, pagedResult, textResult } from "./response.js";
-import { todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
+import { planInputSchema, todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
 
 const readAnnotations = { readOnlyHint: true, openWorldHint: true };
 const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
@@ -43,6 +43,20 @@ function projectedPage(items: unknown[], offset: number, limit: number, detail: 
   const projectedItems = items.map(project);
   const omitted = [...new Set(items.flatMap((item, index) => omittedKeys(item, projectedItems[index])))].sort();
   return textResult(pagedResult(projectedItems, offset, limit, detail, omitted));
+}
+
+function projectWorkoutGoal(value: unknown): unknown {
+  const item = record(value);
+  if (item === undefined) {
+    return value;
+  }
+  const workoutPlan = item.workout_plan;
+  return {
+    ...(typeof item.id === "number" ? { id: item.id } : {}),
+    ...(typeof item.title === "string" ? { title: item.title } : {}),
+    ...(typeof item.goal_group === "string" ? { goal_group: item.goal_group } : {}),
+    ...(workoutPlan === undefined ? {} : { workout_plan: workoutPlan === null ? null : planSummary(workoutPlan) })
+  };
 }
 
 export function registerTools(server: McpServer, api: CaliverseApi): void {
@@ -134,6 +148,15 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
       const plan = await api.getPlan(planId);
       return projectedResult(plan, projectPlan(plan, detail, fields), detail);
     } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_create_workout_plan", {
+    title: "Create Caliverse Workout Plan",
+    description: "Create a custom workout plan. This does not activate the plan; no plan-update or activation endpoint has been verified. Requires confirm: true.",
+    inputSchema: { ...planInputSchema.shape, confirm: z.literal(true) },
+    annotations: writeAnnotations
+  }, async ({ confirm: _confirm, ...input }) => {
+    try { return textResult(await api.createPlan(input)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_create_workout", {
@@ -250,6 +273,66 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     annotations: readAnnotations
   }, async ({ dateFrom, dateTo }) => {
     try { return textResult(await api.getScheduleCalendar(dateFrom, dateTo)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_available_days", {
+    title: "Get Available Caliverse Days",
+    description: "Get your available training days. Day numbers are inferred to use ISO weekdays: 1 is Monday and 7 is Sunday.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getAvailableDays()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_user_properties", {
+    title: "Get Caliverse User Properties",
+    description: "Get account workout-generation settings as key-value records. Known keys include DAILY_WORKOUT_FITNESS_LEVEL, DAILY_WORKOUT_GENERERATION_ENABLED (server spelling), DAILY_WORKOUT_PREFERRED_LENGTH, and DAILY_WORKOUT_FITNESS_GOAL.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try { return textResult(await api.getUserProperties()); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_list_workout_goals", {
+    title: "List Caliverse Workout Goals",
+    description: "List Caliverse's goal catalog and each goal's linked workout-plan summary.",
+    inputSchema: {},
+    annotations: readAnnotations
+  }, async () => {
+    try {
+      const goals = await api.listWorkoutGoals();
+      return Array.isArray(goals) ? textResult(goals.map(projectWorkoutGoal)) : textResult(goals);
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_list_featured_workouts", {
+    title: "List Featured Caliverse Workouts",
+    description: "List featured public workouts. Default detail is summary; use offset and nextOffset to page. fields selects explicit top-level fields.",
+    inputSchema: { query: z.string().trim().min(1).max(100).optional(), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
+    annotations: readAnnotations
+  }, async ({ query, offset, limit, detail, fields }) => {
+    try {
+      const workouts = await api.listFeaturedWorkouts();
+      if (!Array.isArray(workouts)) return textResult(workouts);
+      const normalizedQuery = query?.toLocaleLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_list_generated_workouts", {
+    title: "List Generated Caliverse Workouts",
+    description: "List recently AI-generated workouts. generatedLimit controls Caliverse's server-side result count (default 5); use offset and limit to page the returned results. fields selects explicit top-level fields.",
+    inputSchema: { query: z.string().trim().min(1).max(100).optional(), generatedLimit: z.number().int().positive().max(200).default(5), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
+    annotations: readAnnotations
+  }, async ({ query, generatedLimit, offset, limit, detail, fields }) => {
+    try {
+      const workouts = await api.listGeneratedWorkouts(generatedLimit);
+      if (!Array.isArray(workouts)) return textResult(workouts);
+      const normalizedQuery = query?.toLocaleLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
+    } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_get_coach_profile", {
