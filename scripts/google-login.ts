@@ -31,14 +31,155 @@ export function loginPage(nonce: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="caliverse-login-nonce" content="${nonce}">
   <title>Caliverse Google Login</title>
+  <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<p id="status">Sign in with the Google account linked to Caliverse.</p>
-<button id="sign-in" type="button">Sign in with Google</button>
+<main class="card">
+  <p class="wordmark">Caliverse</p>
+  <p class="eyebrow">MCP local login</p>
+  <h1>Sign in</h1>
+  <p class="lede">Use the Google account linked to your Caliverse account.</p>
+  <button id="sign-in" type="button" class="google-btn">
+    <svg class="google-icon" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.09-1.81 2.73v2.26h2.92c1.7-1.57 2.69-3.88 2.69-6.63z"/>
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.85.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.95v2.33C2.44 15.98 5.48 18 9 18z"/>
+      <path fill="#FBBC05" d="M3.97 10.71c-.18-.54-.28-1.11-.28-1.71s.1-1.17.28-1.71V4.96H.95A8.96 8.96 0 0 0 0 9c0 1.45.35 2.83.95 4.04l3.02-2.33z"/>
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.95 4.96l3.02 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+    </svg>
+    <span>Sign in with Google</span>
+  </button>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+  <p class="fine-print">Runs only on this machine. Closes automatically once you're signed in, or after five minutes.</p>
+</main>
 <script src="https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app-compat.js" integrity="${FIREBASE_APP_SRI}" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth-compat.js" integrity="${FIREBASE_AUTH_SRI}" crossorigin="anonymous"></script>
 <script src="/app.js"></script>
 </body></html>`;
+}
+
+export function loginStyles(): string {
+  return `:root {
+  color-scheme: light;
+  --cv-teal: #5bc0be;
+  --cv-teal-hover: #80cecd;
+  --cv-teal-dark: #40a8a6;
+  --cv-navy: #1c2541;
+  --cv-navy-slate: #3a506b;
+  --cv-ink: #232323;
+  --cv-body: #404040;
+  --cv-muted: #9a9a9a;
+  --cv-border: #e1e1e1;
+  --cv-danger: #fd585c;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  min-height: 100%;
+}
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: linear-gradient(180deg, var(--cv-navy) 0%, var(--cv-navy-slate) 100%);
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: var(--cv-body);
+}
+.card {
+  width: 100%;
+  max-width: 380px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px 32px 32px;
+  text-align: center;
+  box-shadow: 0 24px 60px -20px rgba(11, 19, 43, 0.45);
+}
+.wordmark {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cv-teal-dark);
+}
+.eyebrow {
+  margin: 4px 0 24px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cv-muted);
+}
+h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--cv-ink);
+}
+.lede {
+  margin: 0 0 28px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--cv-body);
+}
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 48px;
+  padding: 0 20px;
+  background: #fff;
+  border: 1px solid #0a0a0a;
+  border-radius: 6px;
+  color: var(--cv-ink);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.google-btn:hover:not(:disabled) {
+  background-color: #f7f7f7;
+}
+.google-btn:focus-visible {
+  outline: 2px solid var(--cv-teal);
+  outline-offset: 2px;
+}
+.google-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.google-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.status {
+  min-height: 20px;
+  margin: 20px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cv-muted);
+}
+.status.is-pending {
+  color: var(--cv-navy-slate);
+}
+.status.is-done {
+  color: var(--cv-teal-dark);
+}
+.status.is-error {
+  color: var(--cv-danger);
+}
+.fine-print {
+  margin: 24px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cv-muted);
+}
+`;
 }
 
 export function loginScript(): string {
@@ -53,13 +194,18 @@ export function loginScript(): string {
   };
   firebase.initializeApp(config);
   const auth = firebase.auth();
+  const setStatus = (text, state) => {
+    status.textContent = text;
+    status.classList.remove("is-pending", "is-done", "is-error");
+    if (state) status.classList.add(state);
+  };
   const fail = (error) => {
     signInButton.disabled = false;
-    status.textContent = "Google login failed: " + error.message;
+    setStatus("Google login failed: " + error.message, "is-error");
   };
   signInButton.addEventListener("click", async () => {
     signInButton.disabled = true;
-    status.textContent = "Opening Google sign-in...";
+    setStatus("Opening Google sign-in...", "is-pending");
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("email");
     const result = await auth.signInWithPopup(provider);
@@ -69,13 +215,14 @@ export function loginScript(): string {
       body: JSON.stringify({ nonce, refreshToken: result.user.refreshToken })
     });
     if (!response.ok) throw new Error(await response.text());
-    status.textContent = "Caliverse login complete. You may close this tab.";
+    signInButton.hidden = true;
+    setStatus("Caliverse login complete. You may close this tab.", "is-done");
   }).catch(fail);
 })();`;
 }
 
 function setSecurityHeaders(response: ServerResponse): void {
-  response.setHeader("content-security-policy", "default-src 'none'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://calisthenics-hannibal-firebase.firebaseapp.com; frame-src https://calisthenics-hannibal-firebase.firebaseapp.com https://accounts.google.com; style-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  response.setHeader("content-security-policy", "default-src 'none'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://calisthenics-hannibal-firebase.firebaseapp.com; frame-src https://calisthenics-hannibal-firebase.firebaseapp.com https://accounts.google.com; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   response.setHeader("x-content-type-options", "nosniff");
   response.setHeader("referrer-policy", "no-referrer");
   response.setHeader("cache-control", "no-store");
@@ -145,6 +292,10 @@ export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promis
       }
       if (request.method === "GET" && path === "/app.js") {
         response.writeHead(200, { "content-type": "application/javascript; charset=utf-8" }).end(loginScript());
+        return;
+      }
+      if (request.method === "GET" && path === "/app.css") {
+        response.writeHead(200, { "content-type": "text/css; charset=utf-8" }).end(loginStyles());
         return;
       }
       if (request.method === "POST" && path === "/token") {

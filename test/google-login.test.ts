@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isLoopbackAddress, loginPage, loginScript, startGoogleLogin } from "../scripts/google-login.js";
+import { isLoopbackAddress, loginPage, loginScript, loginStyles, startGoogleLogin } from "../scripts/google-login.js";
 
 test("Google login page pins Firebase browser scripts with SRI", () => {
   const page = loginPage("nonce-value");
   assert.match(page, /content="nonce-value"/);
   assert.match(page, /id="sign-in"/);
+  assert.match(page, /id="status"/);
   assert.match(page, /firebase-app-compat\.js" integrity="sha384-/);
   assert.match(page, /firebase-auth-compat\.js" integrity="sha384-/);
   assert.doesNotMatch(page, /<script[^>]*>(?!<\/script>)/);
+  assert.doesNotMatch(page, /<style[^>]*>/);
+  assert.doesNotMatch(page, / style="/);
+  assert.match(page, /<link rel="stylesheet" href="\/app\.css">/);
   assert.match(loginScript(), /signInWithPopup/);
+  assert.match(loginStyles(), /#5bc0be/);
 });
 
 test("loopback filter accepts only local addresses", () => {
@@ -43,7 +48,12 @@ test("Google callback accepts a nonce-bound refresh token over loopback", async 
   assert.match(csp, /frame-src https:\/\/calisthenics-hannibal-firebase\.firebaseapp\.com/);
   assert.match(csp, /frame-src [^;]*https:\/\/accounts\.google\.com/);
   assert.match(csp, /connect-src 'self' https:\/\/identitytoolkit\.googleapis\.com/);
+  assert.match(csp, /style-src 'self'/);
   assert.equal(pageResponse.headers.get("cache-control"), "no-store");
+
+  const cssResponse = await fetch(`${localUrl}app.css`);
+  assert.equal(cssResponse.status, 200);
+  assert.match(cssResponse.headers.get("content-type") ?? "", /text\/css/);
 
   const redirectPageResponse = await fetch(`${localUrl}?firebase-event=example`);
   assert.equal(redirectPageResponse.status, 200);
