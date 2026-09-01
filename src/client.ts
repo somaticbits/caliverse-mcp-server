@@ -10,6 +10,7 @@ const PLAN_TIMEOUT_MS = 45_000;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_PR_SCAN_DAYS = 120;
 const PR_SCAN_CONCURRENCY = 5;
+const ASSET_HOSTS = new Set(["assets.caliverse.app", "cdn.caliverse.app"]);
 
 export class CaliverseApiError extends Error {
   public constructor(
@@ -53,6 +54,19 @@ export class CaliverseApi {
 
   public getWorkout(workoutId: number): Promise<unknown> {
     return this.request(`/workouts/${workoutId}`, { method: "GET" });
+  }
+
+  public fetchAsset(url: string, init?: RequestInit): Promise<Response> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error("Exercise image URL is invalid.");
+    }
+    if (parsed.protocol !== "https:" || !ASSET_HOSTS.has(parsed.hostname)) {
+      throw new Error("Exercise image URL is not an allowed HTTPS Caliverse asset URL.");
+    }
+    return this.fetchImpl(url, init);
   }
 
   public listCategories(): Promise<unknown> {

@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CaliverseApi } from "./client.js";
-import { omittedKeys, planSummary, projectExercise, projectPlan, projectWorkout } from "./projection.js";
-import { fieldsSchema, pageSchema, pagedResult, textResult } from "./response.js";
+import { buildThumbnailUrl, fetchThumbnails, maxImageTotalBytes } from "./media.js";
+import { omittedKeys, planSummary, projectExercise, projectPlan, projectWorkout, workoutSlots } from "./projection.js";
+import { fieldsSchema, maxResultBytes, pageSchema, pagedResult, textResult } from "./response.js";
 import { planInputSchema, todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
 
 const readAnnotations = { readOnlyHint: true, openWorldHint: true };
@@ -11,6 +12,15 @@ const exerciseDetailSchema = z.enum(["summary", "full"]);
 const workoutDetailSchema = z.enum(["summary", "structure", "full"]);
 const planDetailSchema = z.enum(["summary", "full"]);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format.");
+const thumbnailFormatSchema = z.enum(["webp", "jpeg"]);
+const workoutImageInputSchema = {
+  workoutId: z.number().int().positive(),
+  include: z.enum(["main", "all"]).default("main"),
+  size: z.number().int().min(48).max(256).default(96),
+  format: thumbnailFormatSchema.default("webp"),
+  quality: z.number().int().min(1).max(100).default(70),
+  limit: z.number().int().positive().max(24).default(12)
+};
 
 function dateDaysAgo(days: number): string {
   const date = new Date();
@@ -59,6 +69,34 @@ function projectWorkoutGoal(value: unknown): unknown {
   };
 }
 
+function workoutTitle(value: unknown): string {
+  const title = record(value)?.title;
+  return typeof title === "string" ? title : "Workout";
+}
+
+function slotCaption(slot: ReturnType<typeof workoutSlots>[number]): string {
+  const work = slot.set_count === null || slot.repetition_count === null
+    ? ""
+    : ` - ${slot.set_count} x ${slot.repetition_count}${slot.repetition_type === "time" ? "s" : ""}`;
+  const rest = slot.rest_time_before_exercise === null || slot.rest_time_before_exercise === 0 ? "" : `, rest ${slot.rest_time_before_exercise}s`;
+  return `${slot.position}. ${slot.title ?? "Unnamed exercise"}${work}${rest}`;
+}
+
+const workoutSections = ["warmup", "main", "cooldown"] as const;
+
+function limitedWorkoutSlots(workout: unknown, include: "main" | "all", limit: number) {
+  const slots = workoutSlots(workout, include);
+  return workoutSections.flatMap((section) => {
+    if (include === "main" && section !== "main") return [];
+    const sectionSlots = slots.filter((slot) => slot.section === section);
+    return sectionSlots.length === 0 ? [] : [{ section, slots: sectionSlots.slice(0, limit), omitted: Math.max(0, sectionSlots.length - limit) }];
+  });
+}
+
+function decodedBytes(data: string): number {
+  return Buffer.from(data, "base64").length;
+}
+
 export function registerTools(server: McpServer, api: CaliverseApi): void {
   // Do not add outputSchema here: SDK 1.30 requires structuredContent when one is set,
   // duplicating every JSON payload alongside the required text content.
@@ -88,6 +126,95 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
       if (!Array.isArray(exercises)) return errorResult("Caliverse returned an invalid exercise list.");
       const exercise = exercises.find((item) => record(item)?.id === exerciseId);
       return exercise === undefined ? errorResult(`Exercise ${exerciseId} was not found.`) : projectedResult(exercise, projectExercise(exercise, detail, fields), detail);
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_show_workout_images", {
+    title: "Show Planned Workout Exercise Images",
+    description: "Display exercise thumbnails for a workout directly in the conversation, with each exercise's sets, reps, and rest. Defaults to compact 96px WebP thumbnails.",
+    inputSchema: workoutImageInputSchema,
+    annotations: readAnnotations
+  }, async ({ workoutId, include, size, format, quality, limit }) => {
+    try {
+      const workout = await api.getWorkout(workoutId);
+      const sections = limitedWorkoutSlots(workout, include, limit);
+      const slots = sections.flatMap((section) => section.slots);
+      const urls = slots.flatMap((slot) => slot.image_url === null ? [] : [buildThumbnailUrl(slot.image_url, { size, format, quality })]);
+      const thumbnails = await fetchThumbnails(urls, api.fetchAsset.bind(api));
+      const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: "image/webp" | "image/jpeg" | "image/png" | "image/gif" }> = [
+        { type: "text", text: `${workoutTitle(workout)}: ${slots.length} displayed exercise${slots.length === 1 ? "" : "s"}.` }
+      ];
+      let imageBytes = 0;
+      let budgetOmitted = 0;
+      for (const section of sections) {
+        content.push({ type: "text", text: section.section === "main" ? "Main workout" : section.section === "warmup" ? "Warm-up" : "Cooldown" });
+        for (const slot of section.slots) {
+          content.push({ type: "text", text: slotCaption(slot) });
+          if (slot.image_url === null) {
+            content.push({ type: "text", text: "No exercise image is available." });
+            continue;
+          }
+          const result = thumbnails.get(buildThumbnailUrl(slot.image_url, { size, format, quality }));
+          if (result instanceof Error || result === undefined) {
+            content.push({ type: "text", text: `Exercise image unavailable: ${result instanceof Error ? result.message : "Unknown image error."}` });
+          } else if (imageBytes + decodedBytes(result.data) > maxImageTotalBytes) {
+            budgetOmitted += 1;
+          } else {
+            imageBytes += decodedBytes(result.data);
+            content.push({ type: "image", ...result });
+          }
+        }
+        if (section.omitted > 0) content.push({ type: "text", text: `${section.omitted} more ${section.section} exercise${section.omitted === 1 ? "" : "s"} omitted by the per-section limit.` });
+      }
+      if (budgetOmitted > 0) content.push({ type: "text", text: `${budgetOmitted} thumbnail${budgetOmitted === 1 ? "" : "s"} omitted to stay within the ${maxImageTotalBytes}-byte image budget.` });
+      return { content };
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("caliverse_get_workout_card_data", {
+    title: "Get Planned Workout Card Data",
+    description: "Return render-ready exercise card data for a beautiful workout-plan artifact. Use thumbnailMode dataUri if the artifact cannot load external Caliverse asset URLs.",
+    inputSchema: {
+      workoutId: z.number().int().positive(),
+      include: z.enum(["main", "all"]).default("main"),
+      thumbnailMode: z.enum(["url", "dataUri"]).default("url"),
+      size: z.number().int().min(48).max(256).default(96),
+      cardImageSize: z.number().int().min(128).max(512).default(320),
+      quality: z.number().int().min(1).max(100).default(70),
+      limit: z.number().int().positive().max(24).default(12)
+    },
+    annotations: readAnnotations
+  }, async ({ workoutId, include, thumbnailMode, size, cardImageSize, quality, limit }) => {
+    try {
+      const workout = await api.getWorkout(workoutId);
+      const sections = limitedWorkoutSlots(workout, include, limit);
+      const slots = sections.flatMap((section) => section.slots);
+      const cardUrls = slots.map((slot) => slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size, format: "webp", quality }));
+      const thumbnails = thumbnailMode === "dataUri"
+        ? await fetchThumbnails(cardUrls.filter((url): url is string => url !== null), api.fetchAsset.bind(api))
+        : new Map();
+      let imageBytes = 0;
+      const cards = slots.map((slot, index) => {
+        const thumbnailUrl = slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size, format: "webp", quality });
+        const cardImageUrl = slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size: cardImageSize, format: "webp", quality });
+        if (thumbnailMode !== "dataUri" || thumbnailUrl === null) return { ...slot, thumbnail_url: thumbnailUrl, card_image_url: cardImageUrl };
+        const result = thumbnails.get(cardUrls[index] ?? "");
+        if (result instanceof Error || result === undefined) return { ...slot, thumbnail_url: null, card_image_url: cardImageUrl, thumbnail_error: result?.message ?? "Unknown image error." };
+        if (imageBytes + decodedBytes(result.data) > maxImageTotalBytes) return { ...slot, thumbnail_url: thumbnailUrl, card_image_url: cardImageUrl, thumbnail_error: "Embedded thumbnail omitted to stay within the image budget." };
+        imageBytes += decodedBytes(result.data);
+        return { ...slot, thumbnail_url: `data:${result.mimeType};base64,${result.data}`, card_image_url: cardImageUrl };
+      });
+      const result = {
+        workout: { id: workoutId, title: workoutTitle(workout) },
+        cards,
+        omitted_by_section: Object.fromEntries(sections.filter((section) => section.omitted > 0).map((section) => [section.section, section.omitted])),
+        thumbnail_mode_applied: thumbnailMode,
+        render_hint: "Create a polished exercise-card grid grouped by section and superset. Place the thumbnail above the exercise title, then show sets x reps and rest time as concise metadata."
+      };
+      if (thumbnailMode === "dataUri" && Buffer.byteLength(JSON.stringify(result), "utf8") > maxResultBytes) {
+        return textResult({ ...result, cards: cards.map((card, index) => ({ ...card, thumbnail_url: cardUrls[index] ?? null })), thumbnail_mode_applied: "url", notice: "Embedded thumbnails exceeded the text-result budget; remote thumbnail URLs were returned instead." });
+      }
+      return textResult(result);
     } catch (error) { return errorResult(error); }
   });
 
@@ -444,4 +571,18 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   }, async ({ logId }) => {
     try { return textResult(await api.deleteWorkoutLog(logId)); } catch (error) { return errorResult(error); }
   });
+
+  server.registerPrompt("caliverse_render_workout_cards", {
+    title: "Render Planned Workout Cards",
+    description: "Create a polished exercise-card artifact from Caliverse workout card data.",
+    argsSchema: { workoutId: z.string().regex(/^\d+$/, "Use a numeric workout ID.") }
+  }, async ({ workoutId }) => ({
+    messages: [{
+      role: "user",
+      content: {
+        type: "text",
+        text: `Call caliverse_get_workout_card_data with workoutId ${workoutId}. Then create a polished exercise-card grid grouped by section and superset. Use card_image_url for the imagery, and show the title, sets x reps, and rest time as concise metadata.`
+      }
+    }]
+  }));
 }

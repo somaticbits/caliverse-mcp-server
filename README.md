@@ -88,6 +88,12 @@ Use a normal absolute path, not `pnpm exec`, `npx`, a shell wrapper, or a remote
 3. Call `caliverse_create_workout` with valid exercise IDs and `confirm: true`.
 4. Read the created workout back with `detail: "structure"` before making a replacement update.
 
+To preview a planned workout in the chat, call `caliverse_show_workout_images` with its workout ID.
+It returns compact image blocks alongside each exercise's sets, reps, and rest. For a designed
+Claude artifact, call `caliverse_get_workout_card_data`: its default `thumbnailMode: "url"` is
+lean, while `thumbnailMode: "dataUri"` embeds the thumbnails for artifact sandboxes that block
+remote images.
+
 `caliverse_update_workout` replaces the complete workout definition. Always read a workout first and preserve every field you intend to keep. `caliverse_delete_workout` is irreversible. Read tools default to compact summaries; use `detail: "full"` for the unmodified API object, or `fields` to select explicit top-level fields.
 
 ## Testing

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { projectExercise, projectPlan, projectWorkout } from "../src/projection.js";
+import { projectExercise, projectPlan, projectWorkout, workoutSlots } from "../src/projection.js";
 import { workoutInputSchema } from "../src/types.js";
 
 test("exercise and plan summaries omit their large detail fields", () => {
@@ -32,4 +32,26 @@ test("workout structure retains the clone input fields while removing expanded r
   });
   assert.equal(input.lengthInMinutes, 45);
   assert.equal(input.supersets[0]?.exercises[0]?.exerciseId, 42);
+});
+
+test("workoutSlots preserves real per-superset exercise ordering", () => {
+  const workout = {
+    supersets: [
+      { id: 4625074, order_in_workout: 4, workout_exercises: [{ id: 9343653, order_in_workout: 2, set_count: 3, repetition_count: 12, repetition_type: "count", rest_time_before_exercise: 60, exercise: { id: 554, title: "Hollow Body Tucks", image_url: "eight" } }, { id: 9343652, order_in_workout: 1, set_count: 3, repetition_count: 15, repetition_type: "time", rest_time_before_exercise: 0, exercise: { id: 1275, title: "Front Lever Advanced Tuck Hold", image_url: "seven" } }] },
+      { id: 4625072, order_in_workout: 2, workout_exercises: [{ id: 9343649, order_in_workout: 2, set_count: 4, repetition_count: 8, repetition_type: "count", rest_time_before_exercise: 60, exercise: { id: 1609, title: "Push-up", image_url: "four" } }, { id: 9343648, order_in_workout: 1, set_count: 4, repetition_count: 5, repetition_type: "count", rest_time_before_exercise: 0, exercise: { id: 1276, title: "Front Lever Tuck Pulse", image_url: "three" } }] },
+      { id: 4625071, order_in_workout: 1, workout_exercises: [{ id: 9343647, order_in_workout: 2, set_count: 4, repetition_count: 8, repetition_type: "count", rest_time_before_exercise: 60, exercise: { id: 17, title: "Bodyweight Row", image_url: "two" } }, { id: 9343646, order_in_workout: 1, set_count: 4, repetition_count: 5, repetition_type: "count", rest_time_before_exercise: 0, exercise: { id: 1279, title: "Front Lever Tuck Hold", image_url: "one" } }] },
+      { id: 4625073, order_in_workout: 3, workout_exercises: [{ id: 9343651, order_in_workout: 2, set_count: 4, repetition_count: 8, repetition_type: "count", rest_time_before_exercise: 60, exercise: { id: 15, title: "Dive Bomber Push Up", image_url: "six" } }, { id: 9343650, order_in_workout: 1, set_count: 4, repetition_count: 5, repetition_type: "count", rest_time_before_exercise: 0, exercise: { id: 1274, title: "Front Lever Advanced Tuck Pulse", image_url: "five" } }] }
+    ]
+  };
+  assert.deepEqual(workoutSlots(workout).map((slot) => [slot.position, slot.superset, slot.order_in_superset, slot.exercise_id]), [
+    [1, 1, 1, 1279], [2, 1, 2, 17], [3, 2, 1, 1276], [4, 2, 2, 1609], [5, 3, 1, 1274], [6, 3, 2, 15], [7, 4, 1, 1275], [8, 4, 2, 554]
+  ]);
+});
+
+test("workoutSlots handles globally numbered exercises and orders out-of-order supersets", () => {
+  const workout = { supersets: [
+    { order_in_workout: 2, workout_exercises: [{ order_in_workout: 3, exercise: { id: 3 } }, { order_in_workout: 4, exercise: { id: 4 } }] },
+    { order_in_workout: 1, workout_exercises: [{ order_in_workout: 1, exercise: { id: 1 } }, { order_in_workout: 2, exercise: { id: 2 } }] }
+  ] };
+  assert.deepEqual(workoutSlots(workout).map((slot) => slot.exercise_id), [1, 2, 3, 4]);
 });

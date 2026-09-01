@@ -32,6 +32,21 @@ test("CaliverseApi retries once with a refreshed token after a 401", async () =>
   assert.equal(new Headers(requests[1]?.headers).get("X-USER-ID-TOKEN"), "new-token");
 });
 
+test("fetchAsset permits only Caliverse HTTPS asset hosts and does not send an auth header", async () => {
+  let headers: Headers | undefined;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (_url, init) => {
+      headers = new Headers(init?.headers);
+      return new Response("image", { status: 200 });
+    }
+  });
+  await api.fetchAsset("https://assets.caliverse.app/image");
+  assert.equal(headers?.get("X-USER-ID-TOKEN"), null);
+  await assert.rejects(async () => api.fetchAsset("https://example.test/image"), /not an allowed HTTPS/);
+  await assert.rejects(async () => api.fetchAsset("not a URL"), /invalid/);
+});
+
 test("CaliverseApi caches exercises but clears the cache after a failed request", async () => {
   let calls = 0;
   const api = new CaliverseApi({

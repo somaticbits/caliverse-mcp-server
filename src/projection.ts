@@ -1,4 +1,4 @@
-const EXERCISE_SUMMARY_FIELDS = ["id", "title", "slug", "level", "is_sided", "is_favorite", "required_equipments"] as const;
+const EXERCISE_SUMMARY_FIELDS = ["id", "title", "slug", "level", "is_sided", "is_favorite"] as const;
 const WORKOUT_SUMMARY_FIELDS = ["id", "title", "private_title", "slug", "level", "length_in_minutes", "is_public", "is_pro", "is_favorite", "is_owned_by_current_user", "owner_type", "type", "system_type", "rating", "rating_count", "image_url"] as const;
 const PLAN_SUMMARY_FIELDS = ["id", "title", "slug", "level", "week_count", "minimum_days_per_week", "recommended_workout_count_per_week", "plan_type", "type", "version", "is_pro", "is_owned_by_current_user", "owner_type", "rating", "image_url"] as const;
 
@@ -104,4 +104,78 @@ export function projectPlan(value: unknown, detail: "summary" | "full", fields?:
     return selectedFields(value, fields);
   }
   return detail === "full" ? value : planSummary(value);
+}
+
+export interface WorkoutSlot {
+  section: "warmup" | "main" | "cooldown";
+  superset: number | null;
+  position: number;
+  order_in_superset: number | null;
+  exercise_id: number | null;
+  title: string | null;
+  set_count: number | null;
+  repetition_count: number | null;
+  repetition_type: string | null;
+  rest_time_before_exercise: number | null;
+  image_url: string | null;
+}
+
+function orderedItems(items: unknown[]): unknown[] {
+  return items
+    .map((value, index) => ({ value, index, order: record(value).order_in_workout }))
+    .sort((left, right) => {
+      const leftOrder = typeof left.order === "number" ? left.order : left.index + 1;
+      const rightOrder = typeof right.order === "number" ? right.order : right.index + 1;
+      return leftOrder - rightOrder || left.index - right.index;
+    })
+    .map((item) => item.value);
+}
+
+function slotValue(value: unknown, section: WorkoutSlot["section"], superset: number | null, position: number): WorkoutSlot {
+  const entry = record(value);
+  const exercise = record(entry.exercise);
+  return {
+    section,
+    superset,
+    position,
+    order_in_superset: typeof entry.order_in_workout === "number" ? entry.order_in_workout : null,
+    exercise_id: typeof exercise.id === "number" ? exercise.id : null,
+    title: typeof exercise.title === "string" ? exercise.title : null,
+    set_count: typeof entry.set_count === "number" ? entry.set_count : null,
+    repetition_count: typeof entry.repetition_count === "number" ? entry.repetition_count : null,
+    repetition_type: typeof entry.repetition_type === "string" ? entry.repetition_type : null,
+    rest_time_before_exercise: typeof entry.rest_time_before_exercise === "number" ? entry.rest_time_before_exercise : null,
+    image_url: typeof exercise.image_url === "string" ? exercise.image_url : null
+  };
+}
+
+function workoutExerciseEntries(workout: unknown): unknown[] {
+  const source = record(workout);
+  if (Array.isArray(source.supersets)) {
+    return orderedItems(source.supersets).flatMap((superset) => {
+      const item = record(superset);
+      return Array.isArray(item.workout_exercises) ? orderedItems(item.workout_exercises) : [];
+    });
+  }
+  // The flat relation has more entries than the nested supersets in observed responses; use it only
+  // when no supersets are available.
+  return Array.isArray(source.workout_exercises) ? orderedItems(source.workout_exercises) : [];
+}
+
+export function workoutSlots(value: unknown, include: "main" | "all" = "main"): WorkoutSlot[] {
+  const source = record(value);
+  const sections: Array<[WorkoutSlot["section"], unknown]> = [["main", source]];
+  if (include === "all") sections.unshift(["warmup", source.warmup_workout]);
+  if (include === "all") sections.push(["cooldown", source.cooldown_workout]);
+  return sections.flatMap(([section, workout]) => {
+    const item = record(workout);
+    const supersets = Array.isArray(item.supersets) ? item.supersets : [];
+    const exerciseSupersets = new Map<unknown, number>();
+    supersets.forEach((superset, index) => {
+      const exercises = record(superset).workout_exercises;
+      const supersetOrder = record(superset).order_in_workout;
+      if (Array.isArray(exercises)) exercises.forEach((exercise) => exerciseSupersets.set(exercise, typeof supersetOrder === "number" ? supersetOrder : index + 1));
+    });
+    return workoutExerciseEntries(workout).map((entry, index) => slotValue(entry, section, exerciseSupersets.get(entry) ?? null, index + 1));
+  });
 }
