@@ -9,14 +9,14 @@ export const workoutExerciseSchema = z.object({
   repetitionType: repetitionTypeSchema.default("count"),
   orderInWorkout: z.number().int().positive(),
   restTimeBeforeExercise: z.number().int().nonnegative().default(0),
-  description: z.string().max(2_000).optional()
+  description: z.string().max(2_000).optional().describe("Stored in Caliverse but not displayed by the app during a workout. Preserve existing values on updates; use the visible superset title for concise new coaching cues.")
 });
 
 export const workoutSupersetSchema = z.object({
   supersetId: z.number().int().positive().nullable().optional(),
   restBetweenCycles: z.number().int().nonnegative().default(0),
   orderInWorkout: z.number().int().positive(),
-  title: z.string().max(200).default(""),
+  title: z.string().max(200).default("").describe("Visible in the Caliverse workout app. Use concise execution cues here for future workouts."),
   exercises: z.array(workoutExerciseSchema).min(1)
 });
 

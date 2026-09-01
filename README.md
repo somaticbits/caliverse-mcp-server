@@ -88,6 +88,10 @@ Use a normal absolute path, not `pnpm exec`, `npx`, a shell wrapper, or a remote
 3. Call `caliverse_create_workout` with valid exercise IDs and `confirm: true`.
 4. Read the created workout back with `detail: "structure"` before making a replacement update.
 
+For workouts planned to run in the Caliverse app, put concise execution cues in each superset title:
+the app displays titles but stores `workout_exercise.description` without displaying it. Preserve
+existing descriptions when updating or cloning a workout, but do not use them for new visible notes.
+
 To preview a planned workout in the chat, call `caliverse_show_workout_images` with its workout ID.
 It returns compact image blocks alongside each exercise's sets, reps, and rest. For a designed
 Claude artifact, call `caliverse_get_workout_card_data`: its default `thumbnailMode: "url"` is

@@ -287,14 +287,14 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   });
 
   server.registerTool("caliverse_create_workout", {
-    title: "Create Caliverse Workout", description: "Create a custom workout. Requires confirm: true.", inputSchema: { ...workoutInputSchema.shape, confirm: z.literal(true) },
+    title: "Create Caliverse Workout", description: "Create a custom workout. Put concise execution cues in visible superset titles; Caliverse stores but does not show workout-exercise descriptions in the app. Requires confirm: true.", inputSchema: { ...workoutInputSchema.shape, confirm: z.literal(true) },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   }, async ({ confirm: _confirm, ...input }) => {
     try { return textResult(await api.createWorkout(input)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_update_workout", {
-    title: "Update Caliverse Workout", description: "Replace a custom workout's complete definition. Read it first with detail structure, preserve fields to keep, and pass confirm: true.", inputSchema: { ...workoutInputSchema.shape, workoutId: z.number().int().positive(), confirm: z.literal(true) },
+    title: "Update Caliverse Workout", description: "Replace a custom workout's complete definition. Read it first with detail structure and preserve existing workout-exercise descriptions even though Caliverse does not display them in the app. Put new concise cues in superset titles. Requires confirm: true.", inputSchema: { ...workoutInputSchema.shape, workoutId: z.number().int().positive(), confirm: z.literal(true) },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
   }, async ({ workoutId, confirm: _confirm, ...input }) => {
     try { return textResult(await api.updateWorkout(workoutId, input)); } catch (error) { return errorResult(error); }

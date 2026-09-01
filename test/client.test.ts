@@ -488,7 +488,8 @@ test("cloneWorkout converts the read shape into the write payload", async () => 
           repetition_count: 8,
           repetition_type: "count",
           order_in_workout: 1,
-          rest_time_before_exercise: 0
+          rest_time_before_exercise: 0,
+          description: "Existing stored coaching note"
         }]
       }]
     }),
@@ -512,5 +513,6 @@ test("cloneWorkout converts the read shape into the write payload", async () => 
   assert.equal(body.get("title"), "Clone");
   assert.equal(body.get("workout_id"), "");
   assert.equal(body.get("workout_supersets[0][workout_exercises][0][exercise_id]"), "42");
+  assert.equal(body.get("workout_supersets[0][workout_exercises][0][description]"), "Existing stored coaching note");
   assert.match(requests[2]?.url ?? "", /workouts\/categories\/assign$/);
 });
