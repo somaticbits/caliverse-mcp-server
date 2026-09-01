@@ -173,7 +173,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
 
   server.registerTool("caliverse_get_workout_card_data", {
     title: "Get Planned Workout Card Data",
-    description: "Return render-ready exercise card data for a beautiful workout-plan artifact. Use thumbnailMode dataUri if the artifact cannot load external Caliverse asset URLs.",
+    description: "Return render-ready exercise card data for a beautiful workout-plan artifact. thumbnailMode dataUri embeds only the compact thumbnail_url; image_url and card_image_url remain external Caliverse links.",
     inputSchema: {
       workoutId: z.number().int().positive(),
       include: z.enum(["main", "all"]).default("main"),
@@ -209,7 +209,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
         cards,
         omitted_by_section: Object.fromEntries(sections.filter((section) => section.omitted > 0).map((section) => [section.section, section.omitted])),
         thumbnail_mode_applied: thumbnailMode,
-        render_hint: "Create a polished exercise-card grid grouped by section and superset. Place the thumbnail above the exercise title, then show sets x reps and rest time as concise metadata."
+        render_hint: "Create a polished exercise-card grid grouped by section and superset. Place thumbnail_url above the exercise title, then show sets x reps and rest time as concise metadata. In dataUri mode, use the embedded thumbnail_url rather than card_image_url."
       };
       if (thumbnailMode === "dataUri" && Buffer.byteLength(JSON.stringify(result), "utf8") > maxResultBytes) {
         return textResult({ ...result, cards: cards.map((card, index) => ({ ...card, thumbnail_url: cardUrls[index] ?? null })), thumbnail_mode_applied: "url", notice: "Embedded thumbnails exceeded the text-result budget; remote thumbnail URLs were returned instead." });
@@ -581,7 +581,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
       role: "user",
       content: {
         type: "text",
-        text: `Call caliverse_get_workout_card_data with workoutId ${workoutId}. Then create a polished exercise-card grid grouped by section and superset. Use card_image_url for the imagery, and show the title, sets x reps, and rest time as concise metadata.`
+        text: `Call caliverse_get_workout_card_data with workoutId ${workoutId}. Then create a polished exercise-card grid grouped by section and superset. Use thumbnail_url for the imagery when thumbnail_mode_applied is dataUri; otherwise use card_image_url. Show the title, sets x reps, and rest time as concise metadata.`
       }
     }]
   }));

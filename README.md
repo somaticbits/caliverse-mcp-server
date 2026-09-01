@@ -91,8 +91,8 @@ Use a normal absolute path, not `pnpm exec`, `npx`, a shell wrapper, or a remote
 To preview a planned workout in the chat, call `caliverse_show_workout_images` with its workout ID.
 It returns compact image blocks alongside each exercise's sets, reps, and rest. For a designed
 Claude artifact, call `caliverse_get_workout_card_data`: its default `thumbnailMode: "url"` is
-lean, while `thumbnailMode: "dataUri"` embeds the thumbnails for artifact sandboxes that block
-remote images.
+lean, while `thumbnailMode: "dataUri"` embeds only `thumbnail_url` for artifact sandboxes that
+block remote images. `card_image_url` remains remote, so use the embedded thumbnail for that mode.
 
 `caliverse_update_workout` replaces the complete workout definition. Always read a workout first and preserve every field you intend to keep. `caliverse_delete_workout` is irreversible. Read tools default to compact summaries; use `detail: "full"` for the unmodified API object, or `fields` to select explicit top-level fields.
 

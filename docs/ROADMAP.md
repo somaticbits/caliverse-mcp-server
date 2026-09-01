@@ -26,6 +26,9 @@ runtime dependency unless Node's built-ins cannot safely do the job.
   a self-contained `dataUri` fallback for artifact sandboxes that block remote images.
 - [x] Stable workout-card ordering: slots are ordered by their superset then their position within
   that superset, rather than the ambiguous exercise order alone.
+- [x] Documented artifact sandbox behavior: `dataUri` embeds compact `thumbnail_url` only. The
+  sandbox blocks remote Caliverse `image_url` and `card_image_url`; 64px is the practical embedded
+  thumbnail ceiling before base64 payload size becomes prohibitive.
 
 ## Next
 
