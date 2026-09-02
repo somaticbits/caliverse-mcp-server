@@ -139,7 +139,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     uri: WORKOUT_CARDS_URI,
     mimeType: WORKOUT_CARDS_MIME_TYPE,
     text: workoutCardsHtml(),
-    _meta: { ui: { csp: { resourceDomains: ["https://assets.caliverse.app"] }, prefersBorder: true } }
+    _meta: { ui: { csp: { resourceDomains: ["https://assets.caliverse.app", "https://cdn.caliverse.app"] }, prefersBorder: true } }
   }] }));
 
   server.registerTool("caliverse_list_exercises", {

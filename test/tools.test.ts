@@ -140,7 +140,7 @@ test("workout card resource and tool expose the MCP App contract", async () => {
     const html = view.contents[0];
     assert.equal(html?.mimeType, "text/html;profile=mcp-app");
     const htmlText = html !== undefined && "text" in html ? html.text : "";
-    assert.deepEqual(html?._meta, { ui: { csp: { resourceDomains: ["https://assets.caliverse.app"] }, prefersBorder: true } });
+    assert.deepEqual(html?._meta, { ui: { csp: { resourceDomains: ["https://assets.caliverse.app", "https://cdn.caliverse.app"] }, prefersBorder: true } });
     const script = htmlText.match(/<script>([\s\S]*)<\/script>/)?.[1];
     assert.ok(script);
     assert.doesNotThrow(() => new Function(script));
