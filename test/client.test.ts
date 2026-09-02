@@ -100,6 +100,36 @@ test("createWorkout assigns an empty category list to clear categories", async (
   assert.equal(new URLSearchParams(String(requests[1]?.body)).get("workout_id"), "30");
 });
 
+test("updateWorkout reports that an update succeeded when its response omits the workout ID", async () => {
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => jsonResponse({ title: "Updated without ID" })
+  });
+
+  await assert.rejects(api.updateWorkout(30, {
+    title: "Category test",
+    isPublic: false,
+    isPro: false,
+    lengthInMinutes: 5,
+    level: "beginner",
+    groupIds: [],
+    categoryIds: [],
+    supersets: [{
+      restBetweenCycles: 0,
+      orderInWorkout: 1,
+      title: "",
+      exercises: [{
+        exerciseId: 1,
+        setCount: 1,
+        repetitionCount: 1,
+        repetitionType: "count",
+        orderInWorkout: 1,
+        restTimeBeforeExercise: 0
+      }]
+    }]
+  }), /Workout was updated, but its ID was not returned/);
+});
+
 test("createPlan sends the captured JSON shape and returns a compact summary", async () => {
   let requestUrl = "";
   let requestInit: RequestInit | undefined;

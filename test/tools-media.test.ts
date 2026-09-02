@@ -23,6 +23,22 @@ function mediaTools(workout: unknown): Map<string, ToolHandler> {
   return tools;
 }
 
+test("get_exercise preserves a specific not-found error message", async () => {
+  const tools = new Map<string, ToolHandler>();
+  const server = {
+    registerTool(name: string, _config: unknown, handler: ToolHandler) { tools.set(name, handler); },
+    registerPrompt() { return {}; }
+  } as unknown as McpServer;
+  const api = { async listExercises() { return []; } } as unknown as CaliverseApi;
+  registerTools(server, api);
+
+  const handler = tools.get("caliverse_get_exercise");
+  assert.ok(handler);
+  const result = await handler({ exerciseId: 999, detail: "full" });
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0]?.text, "Exercise 999 was not found.");
+});
+
 test("show_workout_images keeps sections separate and labels time repetitions", async () => {
   const tools = mediaTools({ title: "Session", warmup_workout: { supersets: [{ order_in_workout: 1, workout_exercises: [{ order_in_workout: 1, exercise: { id: 1, title: "Warm", image_url: imageUrl } }] }] }, supersets: [{ order_in_workout: 1, workout_exercises: [{ order_in_workout: 1, set_count: 3, repetition_count: 15, repetition_type: "time", rest_time_before_exercise: 30, exercise: { id: 2, title: "Hold", image_url: imageUrl } }] }], cooldown_workout: { supersets: [{ order_in_workout: 1, workout_exercises: [{ order_in_workout: 1, exercise: { id: 3, title: "Cool", image_url: imageUrl } }] }] } });
   const handler = tools.get("caliverse_show_workout_images");

@@ -34,6 +34,12 @@ test("workout structure retains the clone input fields while removing expanded r
   assert.equal(input.supersets[0]?.exercises[0]?.exerciseId, 42);
 });
 
+test("workout structure projects missing and invalid workout references as null", () => {
+  const projected = projectWorkout({ id: 12, warmup_workout: undefined, cooldown_workout: "invalid" }, "structure") as Record<string, unknown>;
+  assert.equal(projected.warmup_workout, null);
+  assert.equal(projected.cooldown_workout, null);
+});
+
 test("workoutSlots preserves real per-superset exercise ordering", () => {
   const workout = {
     supersets: [

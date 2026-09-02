@@ -29,7 +29,9 @@ function dateDaysAgo(days: number): string {
 }
 
 function errorResult(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown Caliverse MCP error.";
+  const message = typeof error === "string"
+    ? error
+    : error instanceof Error ? error.message : "Unknown Caliverse MCP error.";
   return { content: [{ type: "text" as const, text: message }], isError: true };
 }
 

@@ -99,13 +99,13 @@ export class CaliverseApi {
 
   public async createWorkout(input: WorkoutInput): Promise<unknown> {
     const created = await this.sendWorkout("/workouts/with-supersets", toApiWorkoutPayload(input, null));
-    await this.assignCategories(created, input.categoryIds);
+    await this.assignCategories(created, input.categoryIds, "created");
     return created;
   }
 
   public async updateWorkout(workoutId: number, input: WorkoutInput): Promise<unknown> {
     const updated = await this.sendWorkout(`/workouts/${workoutId}/with-supersets`, toApiWorkoutPayload(input, workoutId));
-    await this.assignCategories(updated, input.categoryIds);
+    await this.assignCategories(updated, input.categoryIds, "updated");
     return updated;
   }
 
@@ -297,9 +297,9 @@ export class CaliverseApi {
     });
   }
 
-  private async assignCategories(workout: unknown, categoryIds: number[]): Promise<void> {
+  private async assignCategories(workout: unknown, categoryIds: number[], action: "created" | "updated"): Promise<void> {
     if (typeof workout !== "object" || workout === null || typeof (workout as { id?: unknown }).id !== "number") {
-      throw new Error("Workout was created, but its ID was not returned; categories were not assigned.");
+      throw new Error(`Workout was ${action}, but its ID was not returned; categories were not assigned.`);
     }
     await this.request("/workouts/categories/assign", {
       method: "POST",

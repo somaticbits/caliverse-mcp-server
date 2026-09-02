@@ -39,7 +39,7 @@ function idList(value: unknown): number[] {
 }
 
 function workoutRef(value: unknown): Record<string, unknown> | null {
-  if (value === null) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
   return pick(value, ["id", "title", "length_in_minutes"]);

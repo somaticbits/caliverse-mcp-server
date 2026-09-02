@@ -4,6 +4,7 @@ const DEFAULT_MAX_IMAGE_BYTES = 65_536;
 const DEFAULT_MAX_IMAGE_TOTAL_BYTES = 524_288;
 const MIN_MAX_IMAGE_BYTES = 4_096;
 const MAX_MAX_IMAGE_BYTES = 1_048_576;
+const MAX_MAX_IMAGE_TOTAL_BYTES = 4_194_304;
 const IMAGE_TIMEOUT_MS = 10_000;
 const MAX_CACHE_ENTRIES = 128;
 const THUMBNAIL_CONCURRENCY = 5;
@@ -29,15 +30,26 @@ export interface Thumbnail {
 
 const thumbnailCache = new Map<string, Thumbnail>();
 
-function configuredMaxImageBytes(value = process.env.CALIVERSE_MAX_IMAGE_BYTES): number {
+function configuredByteLimit(value: string | undefined, fallback: number, maximum: number): number {
   if (value === undefined || !/^\d+$/.test(value)) {
-    return DEFAULT_MAX_IMAGE_BYTES;
+    return fallback;
   }
-  return Math.min(MAX_MAX_IMAGE_BYTES, Math.max(MIN_MAX_IMAGE_BYTES, Number(value)));
+  return Math.min(maximum, Math.max(MIN_MAX_IMAGE_BYTES, Number(value)));
 }
 
-export const maxImageBytes = configuredMaxImageBytes();
-export const maxImageTotalBytes = configuredMaxImageBytes(process.env.CALIVERSE_MAX_IMAGE_TOTAL_BYTES ?? String(DEFAULT_MAX_IMAGE_TOTAL_BYTES));
+export const maxImageBytes = configuredByteLimit(process.env.CALIVERSE_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGE_BYTES, MAX_MAX_IMAGE_BYTES);
+export const maxImageTotalBytes = Math.max(
+  maxImageBytes,
+  configuredByteLimit(process.env.CALIVERSE_MAX_IMAGE_TOTAL_BYTES, DEFAULT_MAX_IMAGE_TOTAL_BYTES, MAX_MAX_IMAGE_TOTAL_BYTES)
+);
+
+export function imageByteLimitsForTest(imageValue?: string, totalValue?: string): { image: number; total: number } {
+  const image = configuredByteLimit(imageValue, DEFAULT_MAX_IMAGE_BYTES, MAX_MAX_IMAGE_BYTES);
+  return {
+    image,
+    total: Math.max(image, configuredByteLimit(totalValue, DEFAULT_MAX_IMAGE_TOTAL_BYTES, MAX_MAX_IMAGE_TOTAL_BYTES))
+  };
+}
 
 function decodeAssetUrl(url: string): AssetDescriptor | undefined {
   let parsed: URL;

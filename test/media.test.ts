@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildThumbnailUrl, clearThumbnailCacheForTest, fetchThumbnail, fetchThumbnails, sniffImageMime } from "../src/media.js";
+import { buildThumbnailUrl, clearThumbnailCacheForTest, fetchThumbnail, fetchThumbnails, imageByteLimitsForTest, sniffImageMime } from "../src/media.js";
 
 const sourceUrl = "https://assets.caliverse.app/eyJidWNrZXQiOiJjYWxpc3RoZW5pY3MtaGFubmliYWwiLCJrZXkiOiJpbWFnZXNcL2V4ZXJjaXNlc1wvLTYyOTI2MWJjYzc2NjEucG5nIiwiZWRpdHMiOnsicmVzaXplIjp7IndpZHRoIjozNTAsImhlaWdodCI6MzUwLCJmaXQiOiJjb3ZlciJ9fX0=";
 
 function webpResponse(): Response {
   return new Response(Buffer.concat([Buffer.from("RIFF"), Buffer.from([0x08, 0x00, 0x00, 0x00]), Buffer.from("WEBP"), Buffer.from([0x00, 0x00, 0x00, 0x00])]), { status: 200 });
 }
+
+test("image byte limits use distinct defaults and keep the total at least as large as one image", () => {
+  assert.deepEqual(imageByteLimitsForTest(), { image: 65_536, total: 524_288 });
+  assert.deepEqual(imageByteLimitsForTest("bad", "bad"), { image: 65_536, total: 524_288 });
+  assert.deepEqual(imageByteLimitsForTest("900000", "100000"), { image: 900_000, total: 900_000 });
+  assert.deepEqual(imageByteLimitsForTest("99999999", "99999999"), { image: 1_048_576, total: 4_194_304 });
+});
 
 test("buildThumbnailUrl preserves the image source and replaces only supported edits", () => {
   const url = buildThumbnailUrl(sourceUrl, { size: 96, format: "webp", quality: 70 });
