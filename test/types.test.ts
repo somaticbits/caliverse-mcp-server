@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectExercisePrs, mapWorkoutLogToApiPayload, planInputSchema, toApiPlanPayload, toCaliverseDateTime, todayDateString, workoutLogInputSchema } from "../src/types.js";
+import { collectExercisePrs, isoDateSchema, mapWorkoutLogToApiPayload, planInputSchema, toApiPlanPayload, toCaliverseDateTime, todayDateString, workoutLogInputSchema } from "../src/types.js";
 
 function sampleWorkout(): unknown {
   return {
@@ -40,6 +40,19 @@ test("toCaliverseDateTime formats other parseable dates using local time compone
 
 test("toCaliverseDateTime rejects unparseable input", () => {
   assert.throws(() => toCaliverseDateTime("not-a-date"), /is not a valid date/);
+});
+
+test("toCaliverseDateTime rejects impossible wall-clock timestamps", () => {
+  assert.throws(() => toCaliverseDateTime("2026-02-30 10:00:00"), /is not a valid date/);
+  assert.throws(() => toCaliverseDateTime("2026-02-30T10:00:00Z"), /is not a valid date/);
+  assert.throws(() => toCaliverseDateTime("2026-08-31 24:00:00"), /is not a valid date/);
+  assert.throws(() => toCaliverseDateTime("2026-08-31 23:60:00"), /is not a valid date/);
+});
+
+test("isoDateSchema validates the actual calendar date", () => {
+  assert.equal(isoDateSchema.parse("2024-02-29"), "2024-02-29");
+  assert.throws(() => isoDateSchema.parse("2026-02-29"), /valid date/);
+  assert.throws(() => isoDateSchema.parse("2026-13-01"), /valid date/);
 });
 
 test("todayDateString formats an injected clock as YYYY-MM-DD", () => {

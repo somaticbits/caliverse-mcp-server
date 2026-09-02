@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { TokenManager } from "./auth.js";
 import { CaliverseApi } from "./client.js";
 import { loadRefreshTokenWithSource, saveRefreshToken } from "./credentials.js";
-import { registerTools } from "./tools.js";
+import { registerTools, SERVER_INSTRUCTIONS } from "./tools.js";
 
 const { version } = createRequire(import.meta.url)("../../package.json") as { version: string };
 
@@ -21,7 +21,7 @@ async function main(): Promise<void> {
       }
     : undefined;
   const api = new CaliverseApi({ tokenManager: new TokenManager(credentials.refreshToken, fetch, Date.now, persistRefreshToken) });
-  const server = new McpServer({ name: "caliverse-mcp", version });
+  const server = new McpServer({ name: "caliverse-mcp", version }, { instructions: SERVER_INSTRUCTIONS });
   registerTools(server, api);
   await server.connect(new StdioServerTransport());
 }

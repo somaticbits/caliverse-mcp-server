@@ -83,7 +83,7 @@ Use a normal absolute path, not `pnpm exec`, `npx`, a shell wrapper, or a remote
 
 ## Tool workflow
 
-1. Call `caliverse_list_my_workouts` to inspect accepted `level` values in your account.
+1. Call `caliverse_get_workout_filters` to inspect Caliverse's canonical `level` values.
 2. Call `caliverse_list_exercises` (with `query` when possible) to get real exercise IDs. Collection tools return `nextOffset`; pass it as `offset` until it is `null`.
 3. Call `caliverse_create_workout` with valid exercise IDs and `confirm: true`.
 4. Read the created workout back with `detail: "structure"` before making a replacement update.
@@ -99,6 +99,8 @@ lean, while `thumbnailMode: "dataUri"` embeds only `thumbnail_url` for artifact 
 block remote images. `card_image_url` remains remote, so use the embedded thumbnail for that mode.
 
 `caliverse_update_workout` replaces the complete workout definition. Always read a workout first and preserve every field you intend to keep. `caliverse_delete_workout` is irreversible. Read tools default to compact summaries; use `detail: "full"` for the unmodified API object, or `fields` to select explicit top-level fields.
+
+`caliverse_clone_workout` preserves the source structure and stored exercise descriptions, but the clone is always private and non-Pro regardless of the source workout.
 
 ## Testing
 

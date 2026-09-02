@@ -4,15 +4,15 @@ import type { CaliverseApi } from "./client.js";
 import { buildThumbnailUrl, fetchThumbnails, maxImageTotalBytes } from "./media.js";
 import { omittedKeys, planSummary, projectExercise, projectPlan, projectWorkout, workoutSlots } from "./projection.js";
 import { fieldsSchema, maxResultBytes, pageSchema, pagedResult, textResult } from "./response.js";
-import { planInputSchema, todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
+import { isoDateSchema, planInputSchema, todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
 
+export const SERVER_INSTRUCTIONS = "Use caliverse_get_workout_filters for canonical workout levels. Page collection tools with nextOffset. Read a workout with detail structure before replacing it, preserving all fields and stored exercise descriptions. Put new visible coaching cues in superset titles. Every account mutation requires confirm: true.";
 const readAnnotations = { readOnlyHint: true, openWorldHint: true };
 const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 const destructiveAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
 const exerciseDetailSchema = z.enum(["summary", "full"]);
 const workoutDetailSchema = z.enum(["summary", "structure", "full"]);
 const planDetailSchema = z.enum(["summary", "full"]);
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format.");
 const thumbnailFormatSchema = z.enum(["webp", "jpeg"]);
 const SEARCH_FIELDS = ["title", "private_title", "slug", "description", "level"] as const;
 const workoutImageInputSchema = {
@@ -23,6 +23,14 @@ const workoutImageInputSchema = {
   quality: z.number().int().min(1).max(100).default(70),
   limit: z.number().int().positive().max(24).default(12)
 };
+const fromToDateRangeSchema = z.object({ from: isoDateSchema, to: isoDateSchema }).refine(
+  ({ from, to }) => from <= to,
+  { message: "from must be on or before to.", path: ["to"] }
+);
+const calendarDateRangeSchema = z.object({ dateFrom: isoDateSchema, dateTo: isoDateSchema }).refine(
+  ({ dateFrom, dateTo }) => dateFrom <= dateTo,
+  { message: "dateFrom must be on or before dateTo.", path: ["dateTo"] }
+);
 
 function dateDaysAgo(days: number): string {
   const date = new Date();
@@ -321,7 +329,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   });
 
   server.registerTool("caliverse_clone_workout", {
-    title: "Clone Caliverse Workout", description: "Clone a workout with a new title. Requires confirm: true.", inputSchema: { workoutId: z.number().int().positive(), title: z.string().trim().min(1).max(200), confirm: z.literal(true) },
+    title: "Clone Caliverse Workout", description: "Clone a workout with a new title. The clone is always private and non-Pro regardless of the source. Requires confirm: true.", inputSchema: { workoutId: z.number().int().positive(), title: z.string().trim().min(1).max(200), confirm: z.literal(true) },
     annotations: writeAnnotations
   }, async ({ workoutId, title }) => {
     try { return textResult(await api.cloneWorkout(workoutId, title)); } catch (error) { return errorResult(error); }
@@ -353,7 +361,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   server.registerTool("caliverse_get_exercise_prs", {
     title: "Get Caliverse Exercise PRs",
     description: "Aggregate exercise PRs from completed daily logs. Scans one read-only API request per day; defaults to the last 90 days and accepts at most 120 days per request. Repetition count/time and kilograms are reported separately.",
-    inputSchema: { from: dateSchema.optional(), to: dateSchema.default(() => todayDateString()) },
+    inputSchema: { from: isoDateSchema.optional(), to: isoDateSchema.default(() => todayDateString()) },
     annotations: readAnnotations
   }, async ({ from, to }) => {
     try { return textResult(await api.getExercisePrs(from ?? dateDaysAgo(89), to)); } catch (error) { return errorResult(error); }
@@ -361,7 +369,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
 
   server.registerTool("caliverse_get_available_equipment", {
     title: "Get Available Caliverse Equipment",
-    description: "Get only equipment available to you. An exercise is suitable when every required_equipments[].id from caliverse_list_exercises appears in this list.",
+    description: "Get only equipment available to you. Exercise suitability normally requires every required_equipments[].id to appear in this list, but that field has been absent from observed caliverse_list_exercises responses; do not assume library filtering is complete.",
     inputSchema: {},
     annotations: readAnnotations
   }, async () => {
@@ -407,7 +415,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   server.registerTool("caliverse_get_my_day", {
     title: "Get Caliverse Day Schedule",
     description: "Get one day's scheduled, missed, attended, and finished workouts. date defaults to today (YYYY-MM-DD).",
-    inputSchema: { date: dateSchema.default(() => todayDateString()) },
+    inputSchema: { date: isoDateSchema.default(() => todayDateString()) },
     annotations: readAnnotations
   }, async ({ date }) => {
     try { return textResult(await api.getMyDay(date)); } catch (error) { return errorResult(error); }
@@ -416,7 +424,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   server.registerTool("caliverse_get_schedule_calendar", {
     title: "Get Caliverse Schedule Calendar",
     description: "Get the dates with scheduled workouts within a date range (YYYY-MM-DD, inclusive).",
-    inputSchema: { dateFrom: dateSchema, dateTo: dateSchema },
+    inputSchema: calendarDateRangeSchema,
     annotations: readAnnotations
   }, async ({ dateFrom, dateTo }) => {
     try { return textResult(await api.getScheduleCalendar(dateFrom, dateTo)); } catch (error) { return errorResult(error); }
@@ -491,7 +499,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
   server.registerTool("caliverse_get_coach_history", {
     title: "Get Smart Coach History",
     description: "Get Smart Coach-assigned workouts within a date range (YYYY-MM-DD, inclusive).",
-    inputSchema: { from: dateSchema, to: dateSchema },
+    inputSchema: fromToDateRangeSchema,
     annotations: readAnnotations
   }, async ({ from, to }) => {
     try { return textResult(await api.getCoachHistory(from, to)); } catch (error) { return errorResult(error); }

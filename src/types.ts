@@ -118,7 +118,20 @@ export interface ApiWorkoutPayload {
   workout_supersets: ApiWorkoutSuperset[];
 }
 
-const PLAIN_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const PLAIN_DATETIME_PATTERN = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
+
+export function isValidIsoDate(value: string): boolean {
+  if (!ISO_DATE_PATTERN.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export const isoDateSchema = z.string().superRefine((value, context) => {
+  if (!isValidIsoDate(value)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid date in YYYY-MM-DD format." });
+  }
+});
 
 /**
  * Normalizes a timestamp into Caliverse's naive "YYYY-MM-DD HH:mm:ss" wall-clock format.
@@ -128,8 +141,19 @@ const PLAIN_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
  * on the same machine, in the same timezone, as the account owner triggering it.
  */
 export function toCaliverseDateTime(value: string): string {
-  if (PLAIN_DATETIME_PATTERN.test(value)) {
+  const plain = PLAIN_DATETIME_PATTERN.exec(value);
+  if (plain !== null) {
+    const hours = Number(plain[2]);
+    const minutes = Number(plain[3]);
+    const seconds = Number(plain[4]);
+    if (!isValidIsoDate(plain[1]!) || hours > 23 || minutes > 59 || seconds > 59) {
+      throw new Error(`"${value}" is not a valid date. Use "YYYY-MM-DD HH:mm:ss" (local time) or an ISO 8601 timestamp.`);
+    }
     return value;
+  }
+  const isoDatePrefix = /^(\d{4}-\d{2}-\d{2})T/.exec(value);
+  if (isoDatePrefix !== null && !isValidIsoDate(isoDatePrefix[1]!)) {
+    throw new Error(`"${value}" is not a valid date. Use "YYYY-MM-DD HH:mm:ss" (local time) or an ISO 8601 timestamp.`);
   }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {

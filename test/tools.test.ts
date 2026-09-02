@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CaliverseApi } from "../src/client.js";
-import { registerTools } from "../src/tools.js";
+import { registerTools, SERVER_INSTRUCTIONS } from "../src/tools.js";
 
 interface FakeState {
   planReads: string[];
@@ -37,7 +37,7 @@ async function withClient(action: (client: Client, state: FakeState) => Promise<
       return { id: 100 };
     }
   } as unknown as CaliverseApi;
-  const server = new McpServer({ name: "caliverse-test", version: "1.0.0" });
+  const server = new McpServer({ name: "caliverse-test", version: "1.0.0" }, { instructions: SERVER_INSTRUCTIONS });
   registerTools(server, api);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "caliverse-test-client", version: "1.0.0" });
@@ -140,5 +140,35 @@ test("tool listings advertise read and destructive mutation annotations", async 
     assert.equal(read?.annotations?.readOnlyHint, true);
     assert.equal(destructive?.annotations?.readOnlyHint, false);
     assert.equal(destructive?.annotations?.destructiveHint, true);
+  });
+});
+
+test("server instructions expose the safe workout workflow", async () => {
+  await withClient(async (client) => {
+    assert.match(client.getInstructions() ?? "", /caliverse_get_workout_filters/);
+    assert.match(client.getInstructions() ?? "", /confirm: true/);
+    assert.match(client.getInstructions() ?? "", /detail structure/);
+  });
+});
+
+test("date tools reject impossible and reversed ranges before invoking the API", async () => {
+  await withClient(async (client) => {
+    const invalidDate = await client.callTool({ name: "caliverse_get_my_day", arguments: { date: "2026-02-30" } });
+    assert.equal(invalidDate.isError, true);
+    assert.match(text(invalidDate), /valid date/);
+
+    const reversedCalendar = await client.callTool({
+      name: "caliverse_get_schedule_calendar",
+      arguments: { dateFrom: "2026-09-02", dateTo: "2026-09-01" }
+    });
+    assert.equal(reversedCalendar.isError, true);
+    assert.match(text(reversedCalendar), /dateFrom must be on or before dateTo/);
+
+    const reversedHistory = await client.callTool({
+      name: "caliverse_get_coach_history",
+      arguments: { from: "2026-09-02", to: "2026-09-01" }
+    });
+    assert.equal(reversedHistory.isError, true);
+    assert.match(text(reversedHistory), /from must be on or before to/);
   });
 });
