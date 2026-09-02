@@ -141,6 +141,11 @@ test("workout card resource and tool expose the MCP App contract", async () => {
     assert.equal(html?.mimeType, "text/html;profile=mcp-app");
     const htmlText = html !== undefined && "text" in html ? html.text : "";
     assert.deepEqual(html?._meta, { ui: { csp: { resourceDomains: ["https://assets.caliverse.app"] }, prefersBorder: true } });
+    const script = htmlText.match(/<script>([\s\S]*)<\/script>/)?.[1];
+    assert.ok(script);
+    assert.doesNotThrow(() => new Function(script));
+    assert.match(htmlText, /method:'ui\/initialize'/);
+    assert.match(htmlText, /ui\/notifications\/initialized/);
     assert.match(htmlText, /ui\/notifications\/tool-result/);
     assert.doesNotMatch(htmlText, /<script[^>]+src=/);
 
@@ -151,7 +156,8 @@ test("workout card resource and tool expose the MCP App contract", async () => {
     assert.match(String(structured?.cards[0]?.card_image_url), /^https:\/\/assets\.caliverse\.app\//);
 
     const tools = (await client.listTools()).tools;
-    assert.equal(tools.find((tool) => tool.name === "caliverse_show_workout_cards")?._meta?.["ui/resourceUri"], "ui://caliverse/workout-cards");
+    const cardsMeta = tools.find((tool) => tool.name === "caliverse_show_workout_cards")?._meta as { ui?: { resourceUri?: string } } | undefined;
+    assert.equal(cardsMeta?.ui?.resourceUri, "ui://caliverse/workout-cards");
     assert.equal(tools.some((tool) => tool.name === "caliverse_get_workout_card_data"), false);
   });
 });
