@@ -93,10 +93,11 @@ the app displays titles but stores `workout_exercise.description` without displa
 existing descriptions when updating or cloning a workout, but do not use them for new visible notes.
 
 To preview a planned workout in the chat, call `caliverse_show_workout_images` with its workout ID.
-It returns compact image blocks alongside each exercise's sets, reps, and rest. For a designed
-Claude artifact, call `caliverse_get_workout_card_data`: its default `thumbnailMode: "url"` is
-lean, while `thumbnailMode: "dataUri"` embeds only `thumbnail_url` for artifact sandboxes that
-block remote images. `card_image_url` remains remote, so use the embedded thumbnail for that mode.
+It returns compact image blocks alongside each exercise's sets, reps, and rest. In Claude Desktop,
+call `caliverse_show_workout_cards` for the interactive MCP App: a responsive grid or table with
+full-size Caliverse thumbnails, section/superset grouping, workout metadata, and video links. The
+view is a server-owned `ui://` resource, so it does not send base64 image data through model context.
+Restart Claude Desktop after rebuilding the server to load an updated view.
 
 `caliverse_update_workout` replaces the complete workout definition. Always read a workout first and preserve every field you intend to keep. `caliverse_delete_workout` is irreversible. Read tools default to compact summaries; use `detail: "full"` for the unmodified API object, or `fields` to select explicit top-level fields.
 
@@ -113,12 +114,31 @@ pnpm test
 
 The test command uses Node's built-in test runner and prints a coverage report scoped to production source under `src/`. The serializer has 100% line/branch/function coverage; auth and client error/retry paths have dedicated tests.
 
+### Workout card preview
+
+The offline preview host lets you inspect the MCP App with representative fixture data before using
+Claude Desktop. It does not access Caliverse or credentials:
+
+```sh
+pnpm preview:cards
+```
+
+Open the loopback URL printed to stderr. Use the host-theme toggle and narrow the browser window to
+check light, dark, and mobile layouts. Video buttons open the fixture URL in a new browser tab.
+
 ### Opt-in live smoke test
 
 Live tests are intentionally disabled by default:
 
 ```sh
 CALIVERSE_LIVE_TEST=1 pnpm smoke
+```
+
+To inspect only the response shape for the most recently changed account workout, without printing
+titles, IDs, or other account values:
+
+```sh
+CALIVERSE_LIVE_TEST=1 pnpm probe -- --workout latest-mine
 ```
 
 That performs authenticated read-only calls. To test a real create/read/delete cycle, first identify a level from an existing workout, then explicitly opt in:

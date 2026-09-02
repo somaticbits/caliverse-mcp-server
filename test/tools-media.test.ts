@@ -13,6 +13,7 @@ function mediaTools(workout: unknown): Map<string, ToolHandler> {
   const tools = new Map<string, ToolHandler>();
   const server = {
     registerTool(name: string, _config: unknown, handler: ToolHandler) { tools.set(name, handler); },
+    registerResource() { return {}; },
     registerPrompt() { return {}; }
   } as unknown as McpServer;
   const api = {
@@ -27,6 +28,7 @@ test("get_exercise preserves a specific not-found error message", async () => {
   const tools = new Map<string, ToolHandler>();
   const server = {
     registerTool(name: string, _config: unknown, handler: ToolHandler) { tools.set(name, handler); },
+    registerResource() { return {}; },
     registerPrompt() { return {}; }
   } as unknown as McpServer;
   const api = { async listExercises() { return []; } } as unknown as CaliverseApi;
@@ -49,13 +51,14 @@ test("show_workout_images keeps sections separate and labels time repetitions", 
   assert.equal(result.content.filter((item) => item.type === "image").length, 3);
 });
 
-test("get_workout_card_data returns render-ready URL cards", async () => {
+test("show_workout_cards returns render-ready structured cards", async () => {
   const tools = mediaTools({ title: "Session", supersets: [{ order_in_workout: 1, workout_exercises: [{ order_in_workout: 1, set_count: 3, repetition_count: 8, repetition_type: "count", rest_time_before_exercise: 0, exercise: { id: 2, title: "Pull-up", image_url: imageUrl } }] }] });
-  const handler = tools.get("caliverse_get_workout_card_data");
+  const handler = tools.get("caliverse_show_workout_cards");
   assert.ok(handler);
-  const result = await handler({ workoutId: 1, include: "main", thumbnailMode: "url", size: 96, cardImageSize: 320, quality: 70, limit: 12 });
-  const body = JSON.parse(String(result.content[0]?.text));
-  assert.equal(body.cards[0].position, 1);
-  assert.match(body.cards[0].thumbnail_url, /^https:\/\/assets\.caliverse\.app\//);
-  assert.match(body.cards[0].card_image_url, /^https:\/\/assets\.caliverse\.app\//);
+  const result = await handler({ workoutId: 1, cardImageSize: 320, quality: 70, limit: 12 }) as { content: Array<Record<string, unknown>>; structuredContent: { cards: Array<Record<string, unknown>> } };
+  const body = result.structuredContent;
+  const card = body.cards[0];
+  assert.ok(card);
+  assert.equal(card.position, 1);
+  assert.match(String(card.card_image_url), /^https:\/\/assets\.caliverse\.app\//);
 });

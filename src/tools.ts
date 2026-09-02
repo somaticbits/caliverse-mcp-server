@@ -3,10 +3,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CaliverseApi } from "./client.js";
 import { buildThumbnailUrl, fetchThumbnails, maxImageTotalBytes } from "./media.js";
 import { omittedKeys, planSummary, projectExercise, projectPlan, projectWorkout, workoutSlots } from "./projection.js";
-import { fieldsSchema, maxResultBytes, pageSchema, pagedResult, textResult } from "./response.js";
+import { fieldsSchema, pageSchema, pagedResult, textResult } from "./response.js";
 import { isoDateSchema, planInputSchema, todayDateString, workoutInputSchema, workoutLogInputSchema } from "./types.js";
+import { WORKOUT_CARDS_MIME_TYPE, WORKOUT_CARDS_URI, workoutCardsHtml } from "./ui/workout-cards.js";
 
-export const SERVER_INSTRUCTIONS = "Use caliverse_get_workout_filters for canonical workout levels. Page collection tools with nextOffset. Read a workout with detail structure before replacing it, preserving all fields and stored exercise descriptions. Put new visible coaching cues in superset titles. Every account mutation requires confirm: true.";
+export const SERVER_INSTRUCTIONS = "Use caliverse_get_workout_filters for canonical workout levels. Page collection tools with nextOffset. Use caliverse_show_workout_cards to display a workout visually in Claude Desktop. Read a workout with detail structure before replacing it, preserving all fields and stored exercise descriptions. Put new visible coaching cues in superset titles. Every account mutation requires confirm: true.";
 const readAnnotations = { readOnlyHint: true, openWorldHint: true };
 const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 const destructiveAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
@@ -126,13 +127,21 @@ function limitedWorkoutSlots(workout: unknown, include: "main" | "all", limit: n
   });
 }
 
-function decodedBytes(data: string): number {
-  return Buffer.from(data, "base64").length;
-}
-
 export function registerTools(server: McpServer, api: CaliverseApi): void {
   // Do not add outputSchema here: SDK 1.30 requires structuredContent when one is set,
   // duplicating every JSON payload alongside the required text content.
+  server.registerResource("caliverse_workout_cards", WORKOUT_CARDS_URI, {
+    title: "Caliverse Workout Cards",
+    description: "Interactive Caliverse workout exercise card view.",
+    mimeType: WORKOUT_CARDS_MIME_TYPE,
+    _meta: { ui: { prefersBorder: true } }
+  }, async () => ({ contents: [{
+    uri: WORKOUT_CARDS_URI,
+    mimeType: WORKOUT_CARDS_MIME_TYPE,
+    text: workoutCardsHtml(),
+    _meta: { ui: { csp: { resourceDomains: ["https://assets.caliverse.app"] }, prefersBorder: true } }
+  }] }));
+
   server.registerTool("caliverse_list_exercises", {
     title: "List Caliverse Exercises",
     description: "List exercises. Default detail is summary; use offset and nextOffset to page through results. fields selects explicit top-level fields.",
@@ -191,10 +200,10 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
           const result = thumbnails.get(thumbnailUrls.get(slot)!);
           if (result instanceof Error || result === undefined) {
             content.push({ type: "text", text: `Exercise image unavailable: ${result instanceof Error ? result.message : "Unknown image error."}` });
-          } else if (imageBytes + decodedBytes(result.data) > maxImageTotalBytes) {
+          } else if (imageBytes + Buffer.from(result.data, "base64").length > maxImageTotalBytes) {
             budgetOmitted += 1;
           } else {
-            imageBytes += decodedBytes(result.data);
+            imageBytes += Buffer.from(result.data, "base64").length;
             content.push({ type: "image", ...result });
           }
         }
@@ -205,50 +214,27 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     } catch (error) { return errorResult(error); }
   });
 
-  server.registerTool("caliverse_get_workout_card_data", {
-    title: "Get Planned Workout Card Data",
-    description: "Return render-ready exercise card data for a beautiful workout-plan artifact. thumbnailMode dataUri embeds only the compact thumbnail_url; image_url and card_image_url remain external Caliverse links.",
-    inputSchema: {
-      workoutId: z.number().int().positive(),
-      include: z.enum(["main", "all"]).default("main"),
-      thumbnailMode: z.enum(["url", "dataUri"]).default("url"),
-      size: z.number().int().min(48).max(256).default(96),
-      cardImageSize: z.number().int().min(128).max(512).default(320),
-      quality: z.number().int().min(1).max(100).default(70),
-      limit: z.number().int().positive().max(24).default(12)
-    },
-    annotations: readAnnotations
-  }, async ({ workoutId, include, thumbnailMode, size, cardImageSize, quality, limit }) => {
+  server.registerTool("caliverse_show_workout_cards", {
+    title: "Show Planned Workout Cards",
+    description: "Display a responsive exercise-card grid with Caliverse thumbnails, workout details, and video links inside Claude Desktop.",
+    inputSchema: { workoutId: z.number().int().positive(), cardImageSize: z.number().int().min(128).max(512).default(320), quality: z.number().int().min(1).max(100).default(70), limit: z.number().int().positive().max(24).default(24) },
+    annotations: readAnnotations,
+    _meta: { "ui/resourceUri": WORKOUT_CARDS_URI }
+  }, async ({ workoutId, cardImageSize, quality, limit }) => {
     try {
       const workout = await api.getWorkout(workoutId);
-      const sections = limitedWorkoutSlots(workout, include, limit);
-      const slots = sections.flatMap((section) => section.slots);
-      const cardUrls = slots.map((slot) => slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size, format: "webp", quality }));
-      const thumbnails = thumbnailMode === "dataUri"
-        ? await fetchThumbnails(cardUrls.filter((url): url is string => url !== null), api.fetchAsset.bind(api))
-        : new Map();
-      let imageBytes = 0;
-      const cards = slots.map((slot, index) => {
-        const thumbnailUrl = cardUrls[index] ?? null;
-        const cardImageUrl = slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size: cardImageSize, format: "webp", quality });
-        if (thumbnailMode !== "dataUri" || thumbnailUrl === null) return { ...slot, thumbnail_url: thumbnailUrl, card_image_url: cardImageUrl };
-        const result = thumbnails.get(cardUrls[index] ?? "");
-        if (result instanceof Error || result === undefined) return { ...slot, thumbnail_url: null, card_image_url: cardImageUrl, thumbnail_error: result?.message ?? "Unknown image error." };
-        if (imageBytes + decodedBytes(result.data) > maxImageTotalBytes) return { ...slot, thumbnail_url: thumbnailUrl, card_image_url: cardImageUrl, thumbnail_error: "Embedded thumbnail omitted to stay within the image budget." };
-        imageBytes += decodedBytes(result.data);
-        return { ...slot, thumbnail_url: `data:${result.mimeType};base64,${result.data}`, card_image_url: cardImageUrl };
-      });
+      const sections = limitedWorkoutSlots(workout, "main", limit);
+      const cards = sections.flatMap((section) => section.slots).map((slot) => ({
+        ...slot,
+        card_image_url: slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size: cardImageSize, format: "webp", quality })
+      }));
+      const source = record(workout);
       const result = {
-        workout: { id: workoutId, title: workoutTitle(workout) },
+        workout: { id: workoutId, title: workoutTitle(workout), level: typeof source?.level === "string" ? source.level : null, length_in_minutes: typeof source?.length_in_minutes === "number" ? source.length_in_minutes : null },
         cards,
-        omitted_by_section: Object.fromEntries(sections.filter((section) => section.omitted > 0).map((section) => [section.section, section.omitted])),
-        thumbnail_mode_applied: thumbnailMode,
-        render_hint: "Create a polished exercise-card grid grouped by section and superset. Place thumbnail_url above the exercise title, then show sets x reps and rest time as concise metadata. In dataUri mode, use the embedded thumbnail_url rather than card_image_url."
+        omitted_by_section: Object.fromEntries(sections.filter((section) => section.omitted > 0).map((section) => [section.section, section.omitted]))
       };
-      if (thumbnailMode === "dataUri" && Buffer.byteLength(JSON.stringify(result), "utf8") > maxResultBytes) {
-        return textResult({ ...result, cards: cards.map((card, index) => ({ ...card, thumbnail_url: cardUrls[index] ?? null })), thumbnail_mode_applied: "url", notice: "Embedded thumbnails exceeded the text-result budget; remote thumbnail URLs were returned instead." });
-      }
-      return textResult(result);
+      return { content: [{ type: "text" as const, text: `${workoutTitle(workout)}: ${cards.length} exercise${cards.length === 1 ? "" : "s"} displayed in the workout card view.` }], structuredContent: result };
     } catch (error) { return errorResult(error); }
   });
 
@@ -582,17 +568,4 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try { return textResult(await api.deleteWorkoutLog(logId)); } catch (error) { return errorResult(error); }
   });
 
-  server.registerPrompt("caliverse_render_workout_cards", {
-    title: "Render Planned Workout Cards",
-    description: "Create a polished exercise-card artifact from Caliverse workout card data.",
-    argsSchema: { workoutId: z.string().regex(/^\d+$/, "Use a numeric workout ID.") }
-  }, async ({ workoutId }) => ({
-    messages: [{
-      role: "user",
-      content: {
-        type: "text",
-        text: `Call caliverse_get_workout_card_data with workoutId ${workoutId}. Then create a polished exercise-card grid grouped by section and superset. Use thumbnail_url for the imagery when thumbnail_mode_applied is dataUri; otherwise use card_image_url. Show the title, sets x reps, and rest time as concise metadata.`
-      }
-    }]
-  }));
 }

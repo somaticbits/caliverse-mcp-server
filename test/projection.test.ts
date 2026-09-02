@@ -61,3 +61,18 @@ test("workoutSlots handles globally numbered exercises and orders out-of-order s
   ] };
   assert.deepEqual(workoutSlots(workout).map((slot) => slot.exercise_id), [1, 2, 3, 4]);
 });
+
+test("workoutSlots projects card media and superset metadata", () => {
+  const [slot] = workoutSlots({ supersets: [{ order_in_workout: 1, title: "Strength circuit", rest_between_cycles: 90, workout_exercises: [{
+    order_in_workout: 1, set_count: 3, repetition_count: 8, exercise: {
+      id: 1, title: "Pull-up", image_url: "image", video_url: "video", video_url_squared: "square-video", level: "advanced", is_sided: true,
+      required_equipments: [{ id: 2, title: "Bar" }], muscle_groups: [{ id: 3, title: "Back" }]
+    }
+  }] }] });
+  assert.deepEqual(slot, {
+    section: "main", superset: 1, superset_title: "Strength circuit", rest_between_cycles: 90,
+    position: 1, order_in_superset: 1, exercise_id: 1, title: "Pull-up", set_count: 3, repetition_count: 8,
+    repetition_type: null, rest_time_before_exercise: null, image_url: "image", video_url: "video",
+    video_url_squared: "square-video", level: "advanced", is_sided: true, equipment: ["Bar"], muscle_groups: ["Back"]
+  });
+});

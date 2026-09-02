@@ -35,6 +35,9 @@ async function withClient(action: (client: Client, state: FakeState) => Promise<
     async createWorkout() {
       state.createWorkoutCalls += 1;
       return { id: 100 };
+    },
+    async getWorkout() {
+      return { id: 42, title: "Session", level: "beginner", length_in_minutes: 30, supersets: [{ order_in_workout: 1, workout_exercises: [{ order_in_workout: 1, set_count: 3, repetition_count: 8, exercise: { id: 1, title: "Push-up", image_url: "https://assets.caliverse.app/image", video_url: "https://video.example/watch" } }] }] };
     }
   } as unknown as CaliverseApi;
   const server = new McpServer({ name: "caliverse-test", version: "1.0.0" }, { instructions: SERVER_INSTRUCTIONS });
@@ -115,7 +118,7 @@ test("plan list routing uses the compact endpoint only for the default summary",
   });
 });
 
-test("workout goals are projected and the workout-card prompt is exposed", async () => {
+test("workout goals are projected", async () => {
   await withClient(async (client) => {
     const goalsResult = await client.callTool({ name: "caliverse_list_workout_goals", arguments: {} });
     assert.deepEqual(JSON.parse(text(goalsResult)), [{
@@ -124,11 +127,32 @@ test("workout goals are projected and the workout-card prompt is exposed", async
       goal_group: "BUILD",
       workout_plan: { id: 10, title: "Plan" }
     }]);
+  });
+});
 
-    const prompt = await client.getPrompt({ name: "caliverse_render_workout_cards", arguments: { workoutId: "42" } });
-    const promptContent = prompt.messages[0]?.content;
-    assert.equal(promptContent?.type, "text");
-    assert.match("text" in (promptContent ?? {}) ? String(promptContent.text) : "", /workoutId 42/);
+test("workout card resource and tool expose the MCP App contract", async () => {
+  await withClient(async (client) => {
+    const resources = await client.listResources();
+    const resource = resources.resources.find((item) => item.uri === "ui://caliverse/workout-cards");
+    assert.equal(resource?.mimeType, "text/html;profile=mcp-app");
+    assert.deepEqual(resource?._meta, { ui: { prefersBorder: true } });
+    const view = await client.readResource({ uri: "ui://caliverse/workout-cards" });
+    const html = view.contents[0];
+    assert.equal(html?.mimeType, "text/html;profile=mcp-app");
+    const htmlText = html !== undefined && "text" in html ? html.text : "";
+    assert.deepEqual(html?._meta, { ui: { csp: { resourceDomains: ["https://assets.caliverse.app"] }, prefersBorder: true } });
+    assert.match(htmlText, /ui\/notifications\/tool-result/);
+    assert.doesNotMatch(htmlText, /<script[^>]+src=/);
+
+    const result = await client.callTool({ name: "caliverse_show_workout_cards", arguments: { workoutId: 42 } });
+    assert.match(text(result), /Session: 1 exercise/);
+    const structured = result.structuredContent as { workout: { title: string }; cards: Array<{ card_image_url: string }> } | undefined;
+    assert.equal(structured?.workout.title, "Session");
+    assert.match(String(structured?.cards[0]?.card_image_url), /^https:\/\/assets\.caliverse\.app\//);
+
+    const tools = (await client.listTools()).tools;
+    assert.equal(tools.find((tool) => tool.name === "caliverse_show_workout_cards")?._meta?.["ui/resourceUri"], "ui://caliverse/workout-cards");
+    assert.equal(tools.some((tool) => tool.name === "caliverse_get_workout_card_data"), false);
   });
 });
 

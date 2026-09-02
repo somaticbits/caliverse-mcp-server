@@ -17,7 +17,8 @@
     "login": "pnpm build && node dist/scripts/login.js",
     "login:google": "pnpm build && node dist/scripts/google-login.js",
     "smoke": "pnpm build && node dist/scripts/smoke.js",
-    "probe": "pnpm build && node dist/scripts/probe.js"
+    "probe": "pnpm build && node dist/scripts/probe.js",
+    "preview:cards": "pnpm build && node dist/scripts/preview-cards.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

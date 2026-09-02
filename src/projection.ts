@@ -109,6 +109,8 @@ export function projectPlan(value: unknown, detail: "summary" | "full", fields?:
 export interface WorkoutSlot {
   section: "warmup" | "main" | "cooldown";
   superset: number | null;
+  superset_title: string | null;
+  rest_between_cycles: number | null;
   position: number;
   order_in_superset: number | null;
   exercise_id: number | null;
@@ -118,6 +120,18 @@ export interface WorkoutSlot {
   repetition_type: string | null;
   rest_time_before_exercise: number | null;
   image_url: string | null;
+  video_url: string | null;
+  video_url_squared: string | null;
+  level: string | null;
+  is_sided: boolean | null;
+  equipment: string[];
+  muscle_groups: string[];
+}
+
+function titledItems(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => record(item).title).filter((title): title is string => typeof title === "string")
+    : [];
 }
 
 function orderedItems(items: unknown[]): unknown[] {
@@ -131,12 +145,14 @@ function orderedItems(items: unknown[]): unknown[] {
     .map((item) => item.value);
 }
 
-function slotValue(value: unknown, section: WorkoutSlot["section"], superset: number | null, position: number): WorkoutSlot {
+function slotValue(value: unknown, section: WorkoutSlot["section"], superset: number | null, position: number, supersetInfo: Record<string, unknown>): WorkoutSlot {
   const entry = record(value);
   const exercise = record(entry.exercise);
   return {
     section,
     superset,
+    superset_title: typeof supersetInfo.title === "string" ? supersetInfo.title : null,
+    rest_between_cycles: typeof supersetInfo.rest_between_cycles === "number" ? supersetInfo.rest_between_cycles : null,
     position,
     order_in_superset: typeof entry.order_in_workout === "number" ? entry.order_in_workout : null,
     exercise_id: typeof exercise.id === "number" ? exercise.id : null,
@@ -145,7 +161,13 @@ function slotValue(value: unknown, section: WorkoutSlot["section"], superset: nu
     repetition_count: typeof entry.repetition_count === "number" ? entry.repetition_count : null,
     repetition_type: typeof entry.repetition_type === "string" ? entry.repetition_type : null,
     rest_time_before_exercise: typeof entry.rest_time_before_exercise === "number" ? entry.rest_time_before_exercise : null,
-    image_url: typeof exercise.image_url === "string" ? exercise.image_url : null
+    image_url: typeof exercise.image_url === "string" ? exercise.image_url : null,
+    video_url: typeof exercise.video_url === "string" ? exercise.video_url : null,
+    video_url_squared: typeof exercise.video_url_squared === "string" ? exercise.video_url_squared : null,
+    level: typeof exercise.level === "string" ? exercise.level : null,
+    is_sided: typeof exercise.is_sided === "boolean" ? exercise.is_sided : null,
+    equipment: titledItems(exercise.required_equipments),
+    muscle_groups: titledItems(exercise.muscle_groups)
   };
 }
 
@@ -170,12 +192,15 @@ export function workoutSlots(value: unknown, include: "main" | "all" = "main"): 
   return sections.flatMap(([section, workout]) => {
     const item = record(workout);
     const supersets = Array.isArray(item.supersets) ? item.supersets : [];
-    const exerciseSupersets = new Map<unknown, number>();
+    const exerciseSupersets = new Map<unknown, { order: number; info: Record<string, unknown> }>();
     supersets.forEach((superset, index) => {
       const exercises = record(superset).workout_exercises;
       const supersetOrder = record(superset).order_in_workout;
-      if (Array.isArray(exercises)) exercises.forEach((exercise) => exerciseSupersets.set(exercise, typeof supersetOrder === "number" ? supersetOrder : index + 1));
+      if (Array.isArray(exercises)) exercises.forEach((exercise) => exerciseSupersets.set(exercise, { order: typeof supersetOrder === "number" ? supersetOrder : index + 1, info: record(superset) }));
     });
-    return workoutExerciseEntries(workout).map((entry, index) => slotValue(entry, section, exerciseSupersets.get(entry) ?? null, index + 1));
+    return workoutExerciseEntries(workout).map((entry, index) => {
+      const superset = exerciseSupersets.get(entry);
+      return slotValue(entry, section, superset?.order ?? null, index + 1, superset?.info ?? {});
+    });
   });
 }

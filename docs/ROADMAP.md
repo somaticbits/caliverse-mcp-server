@@ -22,17 +22,16 @@ runtime dependency unless Node's built-ins cannot safely do the job.
 
 - [x] Exercise thumbnails in conversation: `caliverse_show_workout_images` fetches compact image
   blocks alongside sets, reps, and rest.
-- [x] Artifact-ready workout cards: `caliverse_get_workout_card_data` returns a lean URL mode and
-  a self-contained `dataUri` fallback for artifact sandboxes that block remote images.
+- [x] Interactive workout cards: `caliverse_show_workout_cards` renders an MCP App inside Claude
+  Desktop with remote Caliverse thumbnails, a responsive card grid/table, and host-opened videos.
 - [x] Stable workout-card ordering: slots are ordered by their superset then their position within
   that superset, rather than the ambiguous exercise order alone.
-- [x] Documented artifact sandbox behavior: `dataUri` embeds compact `thumbnail_url` only. The
-  sandbox blocks remote Caliverse `image_url` and `card_image_url`; 64px is the practical embedded
-  thumbnail ceiling before base64 payload size becomes prohibitive.
+- [x] Local MCP App preview harness: `pnpm preview:cards` renders a fixture in a fake host for
+  light/dark and responsive visual QA without Caliverse access.
 
 ## Next
 
-- [ ] Add exercise video support through MCP `resource_link` content blocks using `video_url`.
+- [ ] Consider inline exercise video after confirming the video host and iframe/video CSP behavior.
 - [ ] Verify and repair equipment filtering. The `/exercises` list observed in August 2026 did not
   include `required_equipments`, although nested workout exercises did.
 - [ ] Capture a completion-log request for a per-superset-numbered workout. The write path currently
