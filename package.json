@@ -10,9 +10,10 @@
     "pnpm": ">=10.7.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node --eval=\"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && node --test --experimental-test-coverage dist/test/*.test.js",
+    "test": "pnpm build && node --test --experimental-test-coverage --test-coverage-include='dist/src/**' dist/test/*.test.js",
     "login": "pnpm build && node dist/scripts/login.js",
     "login:google": "pnpm build && node dist/scripts/google-login.js",
     "smoke": "pnpm build && node dist/scripts/smoke.js",
@@ -23,7 +24,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/node": "26.4.0",
+    "@types/node": "22.20.1",
     "typescript": "7.0.2"
   },
   "pnpm": {

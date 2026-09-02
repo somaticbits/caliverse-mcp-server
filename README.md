@@ -109,7 +109,7 @@ pnpm typecheck
 pnpm test
 ```
 
-The test command uses Node's built-in test runner and prints a coverage report. The serializer has 100% line/branch/function coverage; auth and client error/retry paths have dedicated tests.
+The test command uses Node's built-in test runner and prints a coverage report scoped to production source under `src/`. The serializer has 100% line/branch/function coverage; auth and client error/retry paths have dedicated tests.
 
 ### Opt-in live smoke test
 
