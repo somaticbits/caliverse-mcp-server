@@ -10,6 +10,7 @@ const PLAN_TIMEOUT_MS = 45_000;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_PR_SCAN_DAYS = 120;
 const PR_SCAN_CONCURRENCY = 5;
+const EXERCISES_TTL_MS = 60 * 60_000;
 const ASSET_HOSTS = new Set(["assets.caliverse.app", "cdn.caliverse.app"]);
 
 export class CaliverseApiError extends Error {
@@ -26,6 +27,7 @@ export class CaliverseApiError extends Error {
 export interface CaliverseApiOptions {
   tokenManager: TokenProvider;
   fetchImpl?: FetchLike;
+  now?: () => number;
 }
 
 export interface TokenProvider {
@@ -34,17 +36,28 @@ export interface TokenProvider {
 
 export class CaliverseApi {
   private readonly fetchImpl: FetchLike;
+  private readonly now: () => number;
   private exercises: Promise<unknown> | undefined;
+  private exercisesExpiresAt = 0;
 
   public constructor(private readonly options: CaliverseApiOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.now = options.now ?? Date.now;
   }
 
   public listExercises(): Promise<unknown> {
-    this.exercises ??= this.request("/exercises", { method: "GET" }).catch((error: unknown) => {
-      this.exercises = undefined;
-      throw error;
-    });
+    if (this.exercises === undefined || (this.exercisesExpiresAt !== 0 && this.now() >= this.exercisesExpiresAt)) {
+      this.exercises = this.request("/exercises", { method: "GET" })
+        .then((exercises) => {
+          this.exercisesExpiresAt = this.now() + EXERCISES_TTL_MS;
+          return exercises;
+        })
+        .catch((error: unknown) => {
+          this.exercises = undefined;
+          this.exercisesExpiresAt = 0;
+          throw error;
+        });
+    }
     return this.exercises;
   }
 

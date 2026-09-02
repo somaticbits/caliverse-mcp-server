@@ -13,6 +13,7 @@ const workoutDetailSchema = z.enum(["summary", "structure", "full"]);
 const planDetailSchema = z.enum(["summary", "full"]);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format.");
 const thumbnailFormatSchema = z.enum(["webp", "jpeg"]);
+const SEARCH_FIELDS = ["title", "private_title", "slug", "description", "level"] as const;
 const workoutImageInputSchema = {
   workoutId: z.number().int().positive(),
   include: z.enum(["main", "all"]).default("main"),
@@ -39,9 +40,9 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : undefined;
 }
 
-function exerciseMatches(exercise: unknown, query: string): boolean {
-  const item = record(exercise);
-  return item !== undefined && Object.values(item).some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(query));
+function matchesQuery(value: unknown, query: string): boolean {
+  const item = record(value);
+  return item !== undefined && SEARCH_FIELDS.some((field) => typeof item[field] === "string" && item[field].toLowerCase().includes(query));
 }
 
 function projectedResult(raw: unknown, projected: unknown, detail: string) {
@@ -52,9 +53,11 @@ function projectedResult(raw: unknown, projected: unknown, detail: string) {
 }
 
 function projectedPage(items: unknown[], offset: number, limit: number, detail: string, project: (item: unknown) => unknown) {
-  const projectedItems = items.map(project);
-  const omitted = [...new Set(items.flatMap((item, index) => omittedKeys(item, projectedItems[index])))].sort();
-  return textResult(pagedResult(projectedItems, offset, limit, detail, omitted));
+  const pageItems = items.slice(offset, offset + limit);
+  const projectedItems = pageItems.map(project);
+  const omitted = [...new Set(pageItems.flatMap((item, index) => omittedKeys(item, projectedItems[index])))].sort();
+  const page = pagedResult(items, offset, limit, detail, omitted);
+  return textResult({ ...page, items: projectedItems });
 }
 
 function projectWorkoutGoal(value: unknown): unknown {
@@ -111,8 +114,8 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try {
       const exercises = await api.listExercises();
       if (!Array.isArray(exercises)) return textResult(exercises);
-      const normalizedQuery = query?.toLocaleLowerCase();
-      const results = normalizedQuery === undefined ? exercises : exercises.filter((exercise) => exerciseMatches(exercise, normalizedQuery));
+      const normalizedQuery = query?.toLowerCase();
+      const results = normalizedQuery === undefined ? exercises : exercises.filter((exercise) => matchesQuery(exercise, normalizedQuery));
       return projectedPage(results, offset, limit, detail, (item) => projectExercise(item, detail, fields));
     } catch (error) { return errorResult(error); }
   });
@@ -141,7 +144,8 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
       const workout = await api.getWorkout(workoutId);
       const sections = limitedWorkoutSlots(workout, include, limit);
       const slots = sections.flatMap((section) => section.slots);
-      const urls = slots.flatMap((slot) => slot.image_url === null ? [] : [buildThumbnailUrl(slot.image_url, { size, format, quality })]);
+      const thumbnailUrls = new Map(slots.flatMap((slot) => slot.image_url === null ? [] : [[slot, buildThumbnailUrl(slot.image_url, { size, format, quality })]]));
+      const urls = [...thumbnailUrls.values()];
       const thumbnails = await fetchThumbnails(urls, api.fetchAsset.bind(api));
       const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: "image/webp" | "image/jpeg" | "image/png" | "image/gif" }> = [
         { type: "text", text: `${workoutTitle(workout)}: ${slots.length} displayed exercise${slots.length === 1 ? "" : "s"}.` }
@@ -156,7 +160,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
             content.push({ type: "text", text: "No exercise image is available." });
             continue;
           }
-          const result = thumbnails.get(buildThumbnailUrl(slot.image_url, { size, format, quality }));
+          const result = thumbnails.get(thumbnailUrls.get(slot)!);
           if (result instanceof Error || result === undefined) {
             content.push({ type: "text", text: `Exercise image unavailable: ${result instanceof Error ? result.message : "Unknown image error."}` });
           } else if (imageBytes + decodedBytes(result.data) > maxImageTotalBytes) {
@@ -197,7 +201,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
         : new Map();
       let imageBytes = 0;
       const cards = slots.map((slot, index) => {
-        const thumbnailUrl = slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size, format: "webp", quality });
+        const thumbnailUrl = cardUrls[index] ?? null;
         const cardImageUrl = slot.image_url === null ? null : buildThumbnailUrl(slot.image_url, { size: cardImageSize, format: "webp", quality });
         if (thumbnailMode !== "dataUri" || thumbnailUrl === null) return { ...slot, thumbnail_url: thumbnailUrl, card_image_url: cardImageUrl };
         const result = thumbnails.get(cardUrls[index] ?? "");
@@ -229,8 +233,8 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try {
       const workouts = await api.listMyWorkouts();
       if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLocaleLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      const normalizedQuery = query?.toLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
       return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
     } catch (error) { return errorResult(error); }
   });
@@ -443,8 +447,8 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try {
       const workouts = await api.listFeaturedWorkouts();
       if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLocaleLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      const normalizedQuery = query?.toLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
       return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
     } catch (error) { return errorResult(error); }
   });
@@ -458,8 +462,8 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try {
       const workouts = await api.listGeneratedWorkouts(generatedLimit);
       if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLocaleLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      const normalizedQuery = query?.toLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
       return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
     } catch (error) { return errorResult(error); }
   });
@@ -536,8 +540,8 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     try {
       const workouts = await api.listFavoriteWorkouts();
       if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLocaleLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => exerciseMatches(workout, normalizedQuery));
+      const normalizedQuery = query?.toLowerCase();
+      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
       return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
     } catch (error) { return errorResult(error); }
   });

@@ -77,6 +77,12 @@ test("tool schemas apply defaults, filter exercises, and return page metadata", 
     assert.equal(filteredBody.returned, 1);
     assert.equal(filteredBody.nextOffset, null);
     assert.equal(filteredBody.items[0].title, "Pull-up");
+
+    const unrelatedResult = await client.callTool({
+      name: "caliverse_list_exercises",
+      arguments: { query: "large" }
+    });
+    assert.equal(JSON.parse(text(unrelatedResult)).total, 0);
   });
 });
 

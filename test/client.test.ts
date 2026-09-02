@@ -77,6 +77,41 @@ test("CaliverseApi caches exercises but clears the cache after a failed request"
   assert.equal(calls, 2);
 });
 
+test("CaliverseApi refreshes the exercise cache after one hour", async () => {
+  let calls = 0;
+  let now = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    now: () => now,
+    fetchImpl: async () => {
+      calls += 1;
+      return jsonResponse([{ id: calls }]);
+    }
+  });
+
+  assert.deepEqual(await api.listExercises(), [{ id: 1 }]);
+  now = 3_599_999;
+  assert.deepEqual(await api.listExercises(), [{ id: 1 }]);
+  now = 3_600_000;
+  assert.deepEqual(await api.listExercises(), [{ id: 2 }]);
+  assert.equal(calls, 2);
+});
+
+test("CaliverseApi shares an in-flight exercise request before the cache expiry is known", async () => {
+  let calls = 0;
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return jsonResponse([{ id: 1 }]);
+    }
+  });
+
+  await Promise.all([api.listExercises(), api.listExercises()]);
+  assert.equal(calls, 1);
+});
+
 test("createWorkout assigns an empty category list to clear categories", async () => {
   const requests: RequestInit[] = [];
   const api = new CaliverseApi({
