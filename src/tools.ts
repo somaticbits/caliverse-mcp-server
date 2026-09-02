@@ -216,7 +216,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
 
   server.registerTool("caliverse_show_workout_cards", {
     title: "Show Planned Workout Cards",
-    description: "Display a responsive exercise-card grid with Caliverse thumbnails, workout details, and video links inside Claude Desktop.",
+    description: "Display the workout as an interactive exercise table with Caliverse thumbnails, sets, reps, rest, and playable exercise videos inside Claude Desktop.",
     inputSchema: { workoutId: z.number().int().positive(), cardImageSize: z.number().int().min(128).max(512).default(320), quality: z.number().int().min(1).max(100).default(70), limit: z.number().int().positive().max(24).default(24) },
     annotations: readAnnotations,
     _meta: { ui: { resourceUri: WORKOUT_CARDS_URI } }
