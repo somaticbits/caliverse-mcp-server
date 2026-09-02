@@ -92,3 +92,17 @@ test("TokenManager shares an in-flight refresh across concurrent callers", async
   assert.deepEqual(await Promise.all([manager.getIdToken(), manager.getIdToken(), manager.getIdToken()]), ["token", "token", "token"]);
   assert.equal(calls, 1);
 });
+
+test("TokenManager propagates a failed forced refresh instead of reusing its cached token", async () => {
+  let calls = 0;
+  const manager = new TokenManager("initial", async () => {
+    calls += 1;
+    return calls === 1
+      ? jsonResponse({ id_token: "cached", refresh_token: "rotated", expires_in: "3600" })
+      : jsonResponse({ error: { message: "TOKEN_EXPIRED" } }, 400);
+  });
+
+  assert.equal(await manager.getIdToken(), "cached");
+  await assert.rejects(manager.getIdToken(true), /TOKEN_EXPIRED/);
+  assert.equal(calls, 2);
+});

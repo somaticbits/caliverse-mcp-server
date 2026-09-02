@@ -47,6 +47,20 @@ test("fetchAsset permits only Caliverse HTTPS asset hosts and does not send an a
   await assert.rejects(async () => api.fetchAsset("not a URL"), /invalid/);
 });
 
+test("getWorkout calls the expected detail endpoint", async () => {
+  let requestedUrl = "";
+  const api = new CaliverseApi({
+    tokenManager: { async getIdToken() { return "token"; } },
+    fetchImpl: async (url) => {
+      requestedUrl = url;
+      return jsonResponse({ id: 42 });
+    }
+  });
+
+  assert.deepEqual(await api.getWorkout(42), { id: 42 });
+  assert.equal(requestedUrl, "https://www.caliverse.app/api/v1/workouts/42");
+});
+
 test("CaliverseApi caches exercises but clears the cache after a failed request", async () => {
   let calls = 0;
   const api = new CaliverseApi({
