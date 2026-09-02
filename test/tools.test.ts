@@ -144,6 +144,7 @@ test("workout card resource and tool expose the MCP App contract", async () => {
     const script = htmlText.match(/<script>([\s\S]*)<\/script>/)?.[1];
     assert.ok(script);
     assert.doesNotThrow(() => new Function(script));
+    assert.match(htmlText, /addEventListener\(key\.slice\(2\)\.toLowerCase\(\)/);
     assert.match(htmlText, /method:'ui\/initialize'/);
     assert.match(htmlText, /appInfo:IMPLEMENTATION/);
     assert.match(htmlText, /ui\/notifications\/initialized/);
