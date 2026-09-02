@@ -8,6 +8,7 @@ import { planInputSchema, todayDateString, workoutInputSchema, workoutLogInputSc
 
 const readAnnotations = { readOnlyHint: true, openWorldHint: true };
 const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+const destructiveAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
 const exerciseDetailSchema = z.enum(["summary", "full"]);
 const workoutDetailSchema = z.enum(["summary", "structure", "full"]);
 const planDetailSchema = z.enum(["summary", "full"]);
@@ -58,6 +59,25 @@ function projectedPage(items: unknown[], offset: number, limit: number, detail: 
   const omitted = [...new Set(pageItems.flatMap((item, index) => omittedKeys(item, projectedItems[index])))].sort();
   const page = pagedResult(items, offset, limit, detail, omitted);
   return textResult({ ...page, items: projectedItems });
+}
+
+async function workoutListResult(
+  fetchWorkouts: () => Promise<unknown>,
+  query: string | undefined,
+  offset: number,
+  limit: number,
+  detail: "summary" | "structure" | "full",
+  fields: string[] | undefined
+) {
+  try {
+    const workouts = await fetchWorkouts();
+    if (!Array.isArray(workouts)) return textResult(workouts);
+    const normalizedQuery = query?.toLowerCase();
+    const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
+    return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
+  } catch (error) {
+    return errorResult(error);
+  }
 }
 
 function projectWorkoutGoal(value: unknown): unknown {
@@ -230,13 +250,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     inputSchema: { query: z.string().trim().min(1).max(100).optional(), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
     annotations: readAnnotations
   }, async ({ query, offset, limit, detail, fields }) => {
-    try {
-      const workouts = await api.listMyWorkouts();
-      if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
-      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
-    } catch (error) { return errorResult(error); }
+    return workoutListResult(() => api.listMyWorkouts(), query, offset, limit, detail, fields);
   });
 
   server.registerTool("caliverse_get_workout", {
@@ -294,35 +308,35 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
 
   server.registerTool("caliverse_create_workout", {
     title: "Create Caliverse Workout", description: "Create a custom workout. Put concise execution cues in visible superset titles; Caliverse stores but does not show workout-exercise descriptions in the app. Requires confirm: true.", inputSchema: { ...workoutInputSchema.shape, confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+    annotations: writeAnnotations
   }, async ({ confirm: _confirm, ...input }) => {
     try { return textResult(await api.createWorkout(input)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_update_workout", {
     title: "Update Caliverse Workout", description: "Replace a custom workout's complete definition. Read it first with detail structure and preserve existing workout-exercise descriptions even though Caliverse does not display them in the app. Put new concise cues in superset titles. Requires confirm: true.", inputSchema: { ...workoutInputSchema.shape, workoutId: z.number().int().positive(), confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+    annotations: destructiveAnnotations
   }, async ({ workoutId, confirm: _confirm, ...input }) => {
     try { return textResult(await api.updateWorkout(workoutId, input)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_clone_workout", {
     title: "Clone Caliverse Workout", description: "Clone a workout with a new title. Requires confirm: true.", inputSchema: { workoutId: z.number().int().positive(), title: z.string().trim().min(1).max(200), confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+    annotations: writeAnnotations
   }, async ({ workoutId, title }) => {
     try { return textResult(await api.cloneWorkout(workoutId, title)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_delete_workout", {
     title: "Delete Caliverse Workout", description: "Permanently delete a custom workout. Requires confirm: true.", inputSchema: { workoutId: z.number().int().positive(), confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+    annotations: destructiveAnnotations
   }, async ({ workoutId }) => {
     try { return textResult(await api.deleteWorkout(workoutId)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("caliverse_delete_workout_plan", {
     title: "Delete Caliverse Workout Plan", description: "Permanently delete a custom workout plan. Refuses to delete the active plan; deactivate it in Caliverse first. Requires confirm: true.", inputSchema: { planId: z.number().int().positive(), confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+    annotations: destructiveAnnotations
   }, async ({ planId }) => {
     try { return textResult(await api.deleteWorkoutPlan(planId)); } catch (error) { return errorResult(error); }
   });
@@ -367,7 +381,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     title: "Set Available Caliverse Equipment",
     description: "Replace your complete available-equipment list. This affects future Smart Coach workouts. Requires confirm: true.",
     inputSchema: { equipmentIds: z.array(z.number().int().positive()).min(1).max(100), confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+    annotations: destructiveAnnotations
   }, async ({ equipmentIds }) => {
     try { return textResult(await api.setAvailableEquipment(equipmentIds)); } catch (error) { return errorResult(error); }
   });
@@ -444,13 +458,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     inputSchema: { query: z.string().trim().min(1).max(100).optional(), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
     annotations: readAnnotations
   }, async ({ query, offset, limit, detail, fields }) => {
-    try {
-      const workouts = await api.listFeaturedWorkouts();
-      if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
-      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
-    } catch (error) { return errorResult(error); }
+    return workoutListResult(() => api.listFeaturedWorkouts(), query, offset, limit, detail, fields);
   });
 
   server.registerTool("caliverse_list_generated_workouts", {
@@ -459,13 +467,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     inputSchema: { query: z.string().trim().min(1).max(100).optional(), generatedLimit: z.number().int().positive().max(200).default(5), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
     annotations: readAnnotations
   }, async ({ query, generatedLimit, offset, limit, detail, fields }) => {
-    try {
-      const workouts = await api.listGeneratedWorkouts(generatedLimit);
-      if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
-      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
-    } catch (error) { return errorResult(error); }
+    return workoutListResult(() => api.listGeneratedWorkouts(generatedLimit), query, offset, limit, detail, fields);
   });
 
   server.registerTool("caliverse_get_coach_profile", {
@@ -537,13 +539,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     inputSchema: { query: z.string().trim().min(1).max(100).optional(), ...pageSchema, detail: workoutDetailSchema.default("summary"), fields: fieldsSchema },
     annotations: readAnnotations
   }, async ({ query, offset, limit, detail, fields }) => {
-    try {
-      const workouts = await api.listFavoriteWorkouts();
-      if (!Array.isArray(workouts)) return textResult(workouts);
-      const normalizedQuery = query?.toLowerCase();
-      const results = normalizedQuery === undefined ? workouts : workouts.filter((workout) => matchesQuery(workout, normalizedQuery));
-      return projectedPage(results, offset, limit, detail, (item) => projectWorkout(item, detail, fields));
-    } catch (error) { return errorResult(error); }
+    return workoutListResult(() => api.listFavoriteWorkouts(), query, offset, limit, detail, fields);
   });
 
   server.registerTool("caliverse_get_log_feedback_options", {
@@ -573,7 +569,7 @@ export function registerTools(server: McpServer, api: CaliverseApi): void {
     title: "Delete a Workout Log",
     description: "Delete a previously logged completed workout session by its log ID. Requires confirm: true.",
     inputSchema: { logId: z.number().int().positive(), confirm: z.literal(true) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+    annotations: destructiveAnnotations
   }, async ({ logId }) => {
     try { return textResult(await api.deleteWorkoutLog(logId)); } catch (error) { return errorResult(error); }
   });

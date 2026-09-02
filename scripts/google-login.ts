@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
-import { refreshSession } from "../src/auth.js";
+import { FIREBASE_API_KEY, refreshSession } from "../src/auth.js";
 import { saveRefreshToken } from "../src/credentials.js";
 
 const FIREBASE_APP_SRI = "sha384-HLJUgAQ2oo6rdMC4QW+Oz2qQfPOtu/lzncKG4sZiq8+2W9uOa3K0b3UGpckKqv7H";
@@ -192,7 +192,7 @@ export function loginScript(): string {
   const signInButton = document.getElementById("sign-in");
   const nonce = document.querySelector('meta[name="caliverse-login-nonce"]').content;
   const config = {
-    apiKey: "REDACTED_FIREBASE_WEB_API_KEY",
+    apiKey: "${FIREBASE_API_KEY}",
     authDomain: "calisthenics-hannibal-firebase.firebaseapp.com",
     projectId: "calisthenics-hannibal-firebase"
   };

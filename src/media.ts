@@ -109,7 +109,7 @@ function cache(url: string, thumbnail: Thumbnail): Thumbnail {
   return thumbnail;
 }
 
-function validateUrl(url: string): void {
+export function assertCaliverseAssetUrl(url: string): void {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -124,7 +124,7 @@ function validateUrl(url: string): void {
 export async function fetchThumbnail(url: string, fetchImpl: FetchLike = fetch): Promise<Thumbnail> {
   const cached = thumbnailCache.get(url);
   if (cached !== undefined) return cached;
-  validateUrl(url);
+  assertCaliverseAssetUrl(url);
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
   if (!response.ok) {
     throw new Error(`Exercise image request failed with HTTP ${response.status}.`);

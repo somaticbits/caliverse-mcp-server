@@ -1,5 +1,6 @@
 import { toFormBody } from "./serializer.js";
 import { planSummary } from "./projection.js";
+import { assertCaliverseAssetUrl } from "./media.js";
 import { collectExercisePrs, mapWorkoutLogToApiPayload, toApiPlanPayload, toApiWorkoutPayload, workoutInputSchema, type ExercisePrCollection, type PlanInput, type WorkoutInput, type WorkoutLogInput } from "./types.js";
 import type { FetchLike } from "./auth.js";
 
@@ -11,7 +12,6 @@ const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_PR_SCAN_DAYS = 120;
 const PR_SCAN_CONCURRENCY = 5;
 const EXERCISES_TTL_MS = 60 * 60_000;
-const ASSET_HOSTS = new Set(["assets.caliverse.app", "cdn.caliverse.app"]);
 
 export class CaliverseApiError extends Error {
   public constructor(
@@ -70,15 +70,7 @@ export class CaliverseApi {
   }
 
   public fetchAsset(url: string, init?: RequestInit): Promise<Response> {
-    let parsed: URL;
-    try {
-      parsed = new URL(url);
-    } catch {
-      throw new Error("Exercise image URL is invalid.");
-    }
-    if (parsed.protocol !== "https:" || !ASSET_HOSTS.has(parsed.hostname)) {
-      throw new Error("Exercise image URL is not an allowed HTTPS Caliverse asset URL.");
-    }
+    assertCaliverseAssetUrl(url);
     return this.fetchImpl(url, init);
   }
 
