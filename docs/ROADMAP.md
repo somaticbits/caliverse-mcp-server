@@ -2,8 +2,8 @@
 
 ## Adding a feature
 
-1. Probe the authenticated API shape without retaining account data. Record verified endpoints and
-   response details in `docs/ios-api-map.md`.
+1. Verify the authenticated API shape without retaining account data, and keep notes on the verified
+   endpoints and response details.
 2. Add the client request in `src/client.ts`. Keep authentication and request limits inside the
    client; do not call Caliverse directly from a tool.
 3. Add input validation and payload mapping in `src/types.ts` when needed.
@@ -12,7 +12,7 @@
 5. Register the MCP tool in `src/tools.ts`. Read tools use `readAnnotations`; all mutations require
    an explicit `confirm: true` input.
 6. Add offline tests using injected `fetchImpl`. Do not make ordinary tests depend on a live account.
-7. Update the API map, README, and `.env.example`, then run `pnpm typecheck` and `pnpm test`.
+7. Update your endpoint notes, the README, and `.env.example`, then run `pnpm typecheck` and `pnpm test`.
 
 Tool results normally use `textResult()` so response-size limits apply. Do not add an MCP
 `outputSchema`: this SDK version requires duplicate `structuredContent` when one is set. Add no

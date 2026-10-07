@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { isLoopbackAddress, isValidLoopbackHost, loginPage, loginScript, loginStyles, startGoogleLogin } from "../scripts/google-login.js";
 
+process.env.CALIVERSE_FIREBASE_API_KEY = "test-api-key";
+
 test("Google login page pins Firebase browser scripts with SRI", () => {
   const page = loginPage("nonce-value");
   assert.match(page, /content="nonce-value"/);
@@ -14,6 +16,7 @@ test("Google login page pins Firebase browser scripts with SRI", () => {
   assert.doesNotMatch(page, / style="/);
   assert.match(page, /<link rel="stylesheet" href="\/app\.css">/);
   assert.match(loginScript(), /signInWithPopup/);
+  assert.match(loginScript("test-api-key"), /apiKey: "test-api-key"/);
   assert.match(loginStyles(), /#5bc0be/);
 });
 

@@ -1,6 +1,27 @@
 # Caliverse MCP
 
-Personal-use, stdio-based MCP server for creating and managing Caliverse custom workouts through Caliverse's web API.
+**An MCP server that lets an AI assistant plan, build and log calisthenics workouts in your own [Caliverse](https://caliverse.app) account.**
+
+![Interactive workout cards rendered in an MCP App](docs/workout-cards.png)
+
+*The workout-card MCP App, rendered from the offline preview fixture (`pnpm preview:cards`).*
+
+## Why it exists
+
+Caliverse has no public API or assistant integration. This server gives an MCP client such as Claude Desktop 42 tools to search the exercise library, create and edit custom workouts and plans, read progress and coaching data, and log completed sessions, with every write behind an explicit `confirm: true`. Workouts can also be shown as interactive cards inside the chat.
+
+## How it works
+
+```mermaid
+flowchart LR
+    C[MCP client<br/>e.g. Claude Desktop] <-->|stdio| S[caliverse-mcp<br/>tools · Zod validation · confirm gate]
+    S -->|refresh token| F[Firebase Auth]
+    S -->|HTTPS, fixed endpoints| A[Caliverse API]
+    S -->|ui:// resource| U[Workout cards<br/>MCP App]
+    K[(~/.config/caliverse-mcp<br/>refresh token, 0600)] --> S
+```
+
+The server is stdio-based and runs locally under your own account.
 
 This project is intentionally small: it uses the official MCP SDK, Zod, TypeScript, and Node 22 built-ins. It does not use a third-party HTTP client, form serializer, test framework, credential manager, or runtime transpiler.
 
@@ -13,13 +34,14 @@ This project is intentionally small: it uses the official MCP SDK, Zod, TypeScri
 - Log a completed workout (auto-mapping library exercise IDs to the workout's internal slots) and delete a logged session.
 - Require `confirm: true` for every account mutation.
 
-The read/write endpoints for custom workouts and metadata were derived from Caliverse's public web dashboard behavior. The progress, coaching, schedule, and workout-logging endpoints were derived from observing the official iOS app's own network traffic to the same authenticated API (see `docs/ios-api-map.md`). All of this is unofficial, intended only for the authenticated account owner, and may need updates if Caliverse changes its API. Workout-log weight is recorded in kilograms only, and the completion-logging shape was verified from a single observed request that logged an entire workout at once; partial logs are unverified.
+The read/write endpoints for custom workouts and metadata were derived from Caliverse's public web dashboard behavior. The progress, coaching, schedule, and workout-logging endpoints were derived from observing the official iOS app's own network traffic to the same authenticated API. All of this is unofficial, intended only for the authenticated account owner, and may need updates if Caliverse changes its API. Workout-log weight is recorded in kilograms only, and the completion-logging shape was verified from a single observed request that logged an entire workout at once; partial logs are unverified.
 
 ## Requirements
 
 - Node.js 22 or newer
 - pnpm 10.7.0, activated through Corepack
 - A Caliverse account with workout-creation access
+- Caliverse's Firebase Web API key in `CALIVERSE_FIREBASE_API_KEY`. This is the public `apiKey` value in the Firebase config that Caliverse's web dashboard loads in the browser; it identifies the Firebase project and is not a secret, but it belongs to Caliverse, so it is not committed here.
 
 This repository includes `.nvmrc`; run `nvm use` before installing when using nvm.
 
@@ -40,6 +62,8 @@ pnpm audit --prod
 ## Login
 
 The server stores only a Firebase refresh token at `~/.config/caliverse-mcp/credentials.json`, with mode `0600`. It never stores your password.
+
+Both login commands need `CALIVERSE_FIREBASE_API_KEY` set in the environment (for example `export CALIVERSE_FIREBASE_API_KEY=...`).
 
 In zsh, read credentials without writing them to shell history or echoing the password:
 
@@ -73,7 +97,8 @@ Build first, then configure any stdio-compatible client to run the compiled serv
   "mcpServers": {
     "caliverse": {
       "command": "node",
-      "args": ["/absolute/path/to/caliverse-mcp/dist/src/index.js"]
+      "args": ["/absolute/path/to/caliverse-mcp/dist/src/index.js"],
+      "env": { "CALIVERSE_FIREBASE_API_KEY": "<Caliverse Firebase Web API key>" }
     }
   }
 }
@@ -134,13 +159,6 @@ Live tests are intentionally disabled by default:
 CALIVERSE_LIVE_TEST=1 pnpm smoke
 ```
 
-To inspect only the response shape for the most recently changed account workout, without printing
-titles, IDs, or other account values:
-
-```sh
-CALIVERSE_LIVE_TEST=1 pnpm probe -- --workout latest-mine
-```
-
 That performs authenticated read-only calls. To test a real create/read/delete cycle, first identify a level from an existing workout, then explicitly opt in:
 
 ```sh
@@ -163,3 +181,11 @@ The mutation smoke test creates a short, timestamped workout and deletes it in `
 - `pnpm-lock.yaml` integrity hashes and `pnpm install --frozen-lockfile --ignore-scripts` provide repeatable installs without lifecycle-script execution.
 
 No local project can eliminate all supply-chain or upstream API risk. Keep Node and pnpm patched, inspect lockfile changes, run `pnpm audit --prod` before intentional dependency upgrades, and do not run this server with credentials belonging to anyone else.
+
+## Status
+
+Personal project, built 2026, used with my own account. Unofficial and not affiliated with Caliverse; it relies on undocumented endpoints that may change without notice.
+
+## License
+
+[MIT](LICENSE)

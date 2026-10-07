@@ -2,7 +2,7 @@
   "name": "caliverse-mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "Personal-use MCP server for Caliverse workouts",
+  "description": "MCP server for planning, building and logging Caliverse calisthenics workouts",
   "type": "module",
   "packageManager": "pnpm@10.7.0",
   "engines": {
@@ -17,7 +17,6 @@
     "login": "pnpm build && node dist/scripts/login.js",
     "login:google": "pnpm build && node dist/scripts/google-login.js",
     "smoke": "pnpm build && node dist/scripts/smoke.js",
-    "probe": "pnpm build && node dist/scripts/probe.js",
     "preview:cards": "pnpm build && node dist/scripts/preview-cards.js"
   },
   "dependencies": {

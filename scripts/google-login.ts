@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
-import { FIREBASE_API_KEY, refreshSession } from "../src/auth.js";
+import { firebaseApiKey, refreshSession } from "../src/auth.js";
 import { saveRefreshToken } from "../src/credentials.js";
 
 const FIREBASE_APP_SRI = "sha384-HLJUgAQ2oo6rdMC4QW+Oz2qQfPOtu/lzncKG4sZiq8+2W9uOa3K0b3UGpckKqv7H";
@@ -186,13 +186,13 @@ h1 {
 `;
 }
 
-export function loginScript(): string {
+export function loginScript(apiKey: string = firebaseApiKey()): string {
   return `(() => {
   const status = document.getElementById("status");
   const signInButton = document.getElementById("sign-in");
   const nonce = document.querySelector('meta[name="caliverse-login-nonce"]').content;
   const config = {
-    apiKey: "${FIREBASE_API_KEY}",
+    apiKey: ${JSON.stringify(apiKey)},
     authDomain: "calisthenics-hannibal-firebase.firebaseapp.com",
     projectId: "calisthenics-hannibal-firebase"
   };
@@ -265,6 +265,8 @@ function defaultOpenBrowser(url: string): void {
 }
 
 export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promise<void> {
+  // Fail before opening a browser if the Firebase key is missing.
+  const apiKey = firebaseApiKey();
   const nonce = randomBytes(32).toString("base64url");
   const persistRefreshToken = options.persistRefreshToken ?? (async (token: string) => {
     // Validate before persistence, and persist Firebase's newly rotated refresh token.
@@ -296,7 +298,7 @@ export async function startGoogleLogin(options: GoogleLoginOptions = {}): Promis
         return;
       }
       if (request.method === "GET" && path === "/app.js") {
-        response.writeHead(200, { "content-type": "application/javascript; charset=utf-8" }).end(loginScript());
+        response.writeHead(200, { "content-type": "application/javascript; charset=utf-8" }).end(loginScript(apiKey));
         return;
       }
       if (request.method === "GET" && path === "/app.css") {

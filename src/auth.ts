@@ -1,6 +1,5 @@
-export const FIREBASE_API_KEY = "REDACTED_FIREBASE_WEB_API_KEY";
-const FIREBASE_SIGN_IN_URL = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
-const FIREBASE_REFRESH_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
+const FIREBASE_SIGN_IN_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword";
+const FIREBASE_REFRESH_URL = "https://securetoken.googleapis.com/v1/token";
 const EXPIRY_SKEW_MS = 60_000;
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -60,6 +59,19 @@ function toExpiry(expiresIn: unknown, now: () => number): number {
   return now() + (seconds * 1_000);
 }
 
+/** Caliverse's Firebase Web API key, read from `CALIVERSE_FIREBASE_API_KEY`. */
+export function firebaseApiKey(env: NodeJS.ProcessEnv = process.env): string {
+  const key = env.CALIVERSE_FIREBASE_API_KEY?.trim();
+  if (!key) {
+    throw new AuthenticationError("CALIVERSE_FIREBASE_API_KEY is not set. See .env.example.");
+  }
+  return key;
+}
+
+function withKey(url: string): string {
+  return `${url}?key=${encodeURIComponent(firebaseApiKey())}`;
+}
+
 function requireString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new AuthenticationError(`Authentication response did not include ${field}.`);
@@ -73,7 +85,7 @@ export async function signInWithPassword(
   fetchImpl: FetchLike = fetch,
   now: () => number = Date.now
 ): Promise<AuthSession> {
-  const response = await fetchImpl(FIREBASE_SIGN_IN_URL, {
+  const response = await fetchImpl(withKey(FIREBASE_SIGN_IN_URL), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, password, returnSecureToken: true }),
@@ -92,7 +104,7 @@ export async function refreshSession(
   fetchImpl: FetchLike = fetch,
   now: () => number = Date.now
 ): Promise<AuthSession> {
-  const response = await fetchImpl(FIREBASE_REFRESH_URL, {
+  const response = await fetchImpl(withKey(FIREBASE_REFRESH_URL), {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }).toString(),

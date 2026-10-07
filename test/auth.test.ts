@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AuthenticationError, TokenManager, refreshSession, signInWithPassword } from "../src/auth.js";
+import { AuthenticationError, TokenManager, firebaseApiKey, refreshSession, signInWithPassword } from "../src/auth.js";
+
+process.env.CALIVERSE_FIREBASE_API_KEY = "test-api-key";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -13,7 +15,7 @@ test("signInWithPassword sends Firebase's expected body and maps its response", 
     return jsonResponse({ idToken: "id-token", refreshToken: "refresh-token", expiresIn: "3600" });
   }, () => 1_000);
 
-  assert.match(request?.url ?? "", /accounts:signInWithPassword/);
+  assert.match(request?.url ?? "", /accounts:signInWithPassword\?key=test-api-key$/);
   assert.equal(request?.init?.method, "POST");
   assert.deepEqual(JSON.parse(String(request?.init?.body)), {
     email: "user@example.com",
@@ -105,4 +107,10 @@ test("TokenManager propagates a failed forced refresh instead of reusing its cac
   assert.equal(await manager.getIdToken(), "cached");
   await assert.rejects(manager.getIdToken(true), /TOKEN_EXPIRED/);
   assert.equal(calls, 2);
+});
+
+test("firebaseApiKey requires CALIVERSE_FIREBASE_API_KEY", () => {
+  assert.throws(() => firebaseApiKey({}), AuthenticationError);
+  assert.throws(() => firebaseApiKey({ CALIVERSE_FIREBASE_API_KEY: "  " }), /CALIVERSE_FIREBASE_API_KEY is not set/);
+  assert.equal(firebaseApiKey({ CALIVERSE_FIREBASE_API_KEY: "abc" }), "abc");
 });
